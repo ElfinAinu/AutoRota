@@ -60,6 +60,22 @@ int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O"}
 model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
 
 ###############################################################################
+# Add Weekend-off Constraint for Shift Leaders
+###############################################################################
+def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders):
+    # For each shift leader, require at least one weekend off,
+    # defined as Saturday in week w and Sunday in week w+1 both being off.
+    for emp in shift_leaders:
+        e = employees.index(emp)
+        weekend_off_indicators = []
+        for w in range(num_weeks - 1):
+            weekend_off = model.NewBoolVar(f"weekend_off_{emp}_{w}")
+            # Link the indicator with Saturday off in week w and Sunday off in week w+1.
+            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
+            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
+            weekend_off_indicators.append(weekend_off)
+        # Enforce that at least one weekend boundary is taken off.
+        model.Add(sum(weekend_off_indicators) >= 1)
 # 1) Daily coverage: at least one Early and one Late each day.
 ###############################################################################
 def add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, num_employees):
@@ -192,6 +208,10 @@ def add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees):
 
 add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
 
+# Define shift leaders based on the JSON (or hard-code if needed)
+shift_leaders = ["Jennifer", "Luke", "Senaka", "Stacey"]
+add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders)
+
 ###############################################################################
 # 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
 ###############################################################################
@@ -227,7 +247,17 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     BIG_PENALTY = 1000
     obj_expr = sum(prefs)
     penalties = sum(six_in_a_row[i, e] * BIG_PENALTY for e in range(len(employees)) for i in range(total_days - 5))
-    model.Maximize(obj_expr - penalties)
+    # Penalize working days for step-up employees.
+    stepup_penalty_factor = 100  # adjust value as needed
+    stepup_employees = ["Callum"]  # You can also extract this from JSON
+    stepup_penalty = 0
+    for emp in stepup_employees:
+        e = employees.index(emp)
+        for w in range(num_weeks):
+            for d in range(days_per_week):
+                stepup_penalty += work[w, d, e]
+    # Modify the maximize to subtract the stepup penalty as well.
+    model.Maximize(obj_expr - penalties - stepup_penalty_factor * stepup_penalty)
 
 add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days)
 
