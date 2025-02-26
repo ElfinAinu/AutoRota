@@ -111,7 +111,7 @@ def day_index(w, d):
 for w in range(num_weeks):
     for d in range(days_per_week):
         i = day_index(w, d)
-        for e in range(num_employees):
+        for e in range(len(employees)):
             global_work[i, e] = model.NewBoolVar(f"global_work[{i},{e}]")
             model.Add(global_work[i, e] == 1).OnlyEnforceIf(work[w, d, e])
             model.Add(global_work[i, e] == 0).OnlyEnforceIf(work[w, d, e].Not())
@@ -238,7 +238,34 @@ solver = cp_model.CpSolver()
 status = solver.Solve(model)
 
 
-def main():
+def build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift):
+    schedule = {}
+    for w in range(num_weeks):
+        schedule[w] = {}
+        for d in range(days_per_week):
+            schedule[w][d] = {}
+            for e, emp in enumerate(employees):
+                val = solver.Value(x[w, d, e])
+                schedule[w][d][emp] = int_to_shift[val]
+    return schedule
+
+def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees):
+    with open(output_file, mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        for w in range(num_weeks):
+            week_start = start_date + datetime.timedelta(days=w * days_per_week)
+            header = ["Name"] + [f"{(week_start + datetime.timedelta(days=d)).strftime('%a')} - {(week_start + datetime.timedelta(days=d)).strftime('%d/%m')}" for d in range(days_per_week)]
+            writer.writerow(header)
+            for e, emp in enumerate(employees):
+                row = [emp]
+                for d in range(days_per_week):
+                    shift_str = schedule[w][d][emp]
+                    if emp == "Callum" and shift_str == "D/O":
+                        row.append("")
+                    else:
+                        row.append(shift_str)
+                writer.writerow(row)
+            writer.writerow([])
     script_dir = os.path.dirname(os.path.abspath(__file__))
     json_file = os.path.join(script_dir, "Re Refactored Rules.json")
     required_rules, preferred_rules = load_rules(json_file)
