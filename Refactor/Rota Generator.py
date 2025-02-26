@@ -11,9 +11,10 @@ def load_rules(json_filepath):
     preferred_rules = refactored_rules["Rules"].get("preferred", {})
     return required_rules, preferred_rules
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-json_file = os.path.join(script_dir, "Rules.json")
-required_rules, preferred_rules = load_rules(json_file)
+def load_temporary_rules(json_filepath):
+    with open(json_filepath, "r") as f:
+        temporary_rules = json.load(f)
+    return temporary_rules
 
 day_name_to_index = {
     "Sunday": 0,
@@ -327,6 +328,9 @@ if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
     json_file = os.path.join(script_dir, "Rules.json")
     required_rules, preferred_rules = load_rules(json_file)
+
+    temp_file = os.path.join(script_dir, "Temporary Rules.json")
+    temporary_rules = load_temporary_rules(temp_file)
 
     num_weeks = 4
     days_per_week = 7
