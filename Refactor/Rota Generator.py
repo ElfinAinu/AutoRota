@@ -92,6 +92,13 @@ def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, s
         weekend_slacks[emp] = slack
         weekend_off_indicators[emp] = emp_indicators
     return weekend_off_indicators, weekend_slacks
+
+def add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders):
+    for w in range(num_weeks):
+        for d in [0, days_per_week - 1]:  # Sunday and Saturday
+            for emp in shift_leaders:
+                e = employees.index(emp)
+                model.Add(x[w, d, e] != shift_to_int["M"])
 # 1) Daily coverage: at least one Early and one Late each day.
 ###############################################################################
 def add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, num_employees):
@@ -300,13 +307,22 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(var_middle.Not())
                     prefs.append(var_middle)
     BIG_PENALTY = 1000
-    WEEKEND_BONUS = 5000  # Increased bonus for each full weekend off
+    WEEKEND_BONUS = 8000  # Increase bonus further to encourage full weekend off
     WEEKEND_PENALTY = 2000  # heavy penalty for missing a weekend off
     weekend_penalty_term = sum(weekend_slacks[emp] for emp in weekend_slacks)
     obj_expr = sum(prefs)
     penalties = sum(six_in_a_row[i, e] * BIG_PENALTY for e in range(len(employees)) for i in range(total_days - 5))
     # Penalize working days for step-up employees.
-    stepup_penalty_factor = 200  # Higher penalty for step-up usage
+    stepup_penalty_factor = 150  # slightly lower to permit more usage
+    weekend_coverage_bonus = []
+    for w in range(num_weeks):
+        for d in [0, days_per_week - 1]:
+            e = employees.index("Callum")
+            is_weekend_coverage = model.NewBoolVar(f"callum_weekend_coverage_{w}_{d}")
+            model.Add(x[w, d, e] != shift_to_int["D/O"]).OnlyEnforceIf(is_weekend_coverage)
+            model.Add(x[w, d, e] == shift_to_int["D/O"]).OnlyEnforceIf(is_weekend_coverage.Not())
+            weekend_coverage_bonus.append(is_weekend_coverage)
+    weekend_callum_bonus = 3000 * sum(weekend_coverage_bonus)
     stepup_employees = ["Callum"]  # You can also extract this from JSON
     stepup_penalty = 0
     for emp in stepup_employees:
@@ -323,7 +339,8 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
         -penalties,
         -stepup_penalty_factor * stepup_penalty,
         WEEKEND_BONUS * weekend_bonus,
-        -WEEKEND_PENALTY * weekend_penalty_term
+        -WEEKEND_PENALTY * weekend_penalty_term,
+        weekend_callum_bonus
     ])
     model.Maximize(final_obj)
 
@@ -389,6 +406,7 @@ if __name__ == "__main__":
     add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, work, num_weeks, days_per_week)
     add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
+    add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
     add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks)
 
     solver = cp_model.CpSolver()
