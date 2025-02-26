@@ -120,6 +120,14 @@ def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, s
         weekend_sun_only_indicators[emp] = sun_only_list
     return weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators
 
+def enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks, employees, shift_to_int, alternating_employees):
+    for emp in alternating_employees:
+        e = employees.index(emp)
+        # For every even weekend pair (using weeks 0,2,...), force a full weekend off.
+        for w in range(0, num_weeks - 1, 2):
+            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"])  # Saturday off in week w
+            model.Add(x[w+1, 0, e] == shift_to_int["D/O"])                # Sunday off in week w+1
+
 def add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders):
     for w in range(num_weeks):
         for d in [0, days_per_week - 1]:  # Sunday and Saturday
@@ -512,6 +520,10 @@ if __name__ == "__main__":
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
     add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
     add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int)
+
+    if "Every other weekend off" in required_rules:
+        alternating_employees = required_rules["Every other weekend off"]
+        enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks, employees, shift_to_int, alternating_employees)
     final_obj = add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators, stepup_employees, shift_leaders)
 
     solver = cp_model.CpSolver()
