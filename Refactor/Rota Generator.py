@@ -362,16 +362,19 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
 
     # 5. OFF-DAY GROUPING PENALTY
     OFF_DAY_GROUPING_PENALTY = 2000
-    off_day_penalty = 0
+    off_day_penalty_terms = []
     for e in range(len(employees)):
-        for w in range(num_weeks):
-            for d in range(1, days_per_week - 1):
-                if employees[e] in shift_leaders:
-                    off_day_penalty += model.NewBoolVar(f"off_day_penalty_{w}_{d}_{e}")
-                    model.AddBoolAnd([work[w, d-1, e].Not(), work[w, d+1, e].Not()]).OnlyEnforceIf(off_day_penalty)
-                    model.AddBoolOr([work[w, d-1, e], work[w, d+1, e]]).OnlyEnforceIf(off_day_penalty.Not())
+        if employees[e] in shift_leaders:
+            for w in range(num_weeks):
+                for d in range(1, days_per_week - 1):
+                    off_day_var = model.NewBoolVar(f"off_day_penalty_{w}_{d}_{e}")
+                    off_day_penalty_terms.append(off_day_var)
+                    model.AddBoolAnd([work[w, d-1, e].Not(), work[w, d+1, e].Not()]).OnlyEnforceIf(off_day_var)
+                    model.AddBoolOr([work[w, d-1, e], work[w, d+1, e]]).OnlyEnforceIf(off_day_var.Not())
+    off_day_penalty_expr = cp_model.LinearExpr.Sum(off_day_penalty_terms)
 
     # 6. OTHER PENALTIES (six in a row & duplicate shift leader assignments)
+    off_day_penalty_expr = cp_model.LinearExpr.Sum(off_day_penalty_terms)
     SIX_IN_A_ROW_PENALTY = 1000
     EXTRA_SHIFT_LEADER_PENALTY = 500  # Additional penalty for any shift leader
     six_penalties = 0
@@ -397,7 +400,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
         # (e) Also subtract other penalties:
         - six_penalties,
         - duplicate_penalty,
-        - OFF_DAY_GROUPING_PENALTY * off_day_penalty
+        - OFF_DAY_GROUPING_PENALTY * off_day_penalty_expr
     ])
     model.Maximize(final_obj)
     return final_obj
