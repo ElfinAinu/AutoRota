@@ -96,8 +96,6 @@ def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees
             else:
                 model.Add(sum(day_work) == 5)
     model.Add(sum(work[w, d, callum_idx] for w in range(num_weeks) for d in range(days_per_week)) >= 1)
-
-add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees)
 )
 
 ###############################################################################
