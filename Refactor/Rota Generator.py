@@ -233,8 +233,16 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
             weekend_off_vars = []
             for i in range(num_weeks - 1):
                 weekend_off_i = model.NewBoolVar(f"{emp}_weekend_off_{i}")
-                model.AddBoolAnd([x[i, days_per_week - 1, e] == shift_to_int["D/O"],
-                                  x[i+1, 0, e] == shift_to_int["D/O"]]).OnlyEnforceIf(weekend_off_i)
+                # Reify Saturday off condition for week i.
+                sat_off = model.NewBoolVar(f"{emp}_sat_off_{i}")
+                model.Add(x[i, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(sat_off)
+                model.Add(x[i, days_per_week - 1, e] != shift_to_int["D/O"]).OnlyEnforceIf(sat_off.Not())
+                # Reify Sunday off condition for week i+1.
+                sun_off = model.NewBoolVar(f"{emp}_sun_off_{i}")
+                model.Add(x[i+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(sun_off)
+                model.Add(x[i+1, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(sun_off.Not())
+                # Combine the two conditions.
+                model.AddBoolAnd([sat_off, sun_off]).OnlyEnforceIf(weekend_off_i)
                 weekend_off_vars.append(weekend_off_i)
             model.Add(sum(weekend_off_vars) >= 1)
 
