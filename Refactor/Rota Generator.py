@@ -389,8 +389,8 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
 
     # 6. OTHER PENALTIES (six in a row & duplicate shift leader assignments)
     off_day_penalty_expr = cp_model.LinearExpr.Sum(off_day_penalty_terms)
-    SIX_IN_A_ROW_PENALTY = 100
-    EXTRA_SHIFT_LEADER_PENALTY = 50  # Additional penalty for any shift leader
+    SIX_IN_A_ROW_PENALTY = 20
+    EXTRA_SHIFT_LEADER_PENALTY = 10
     six_penalties = 0
     for e in range(len(employees)):
         for i in range(total_days - 5):
