@@ -155,11 +155,21 @@ def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees
             # otherwise, they must work exactly 5 days per week.
             if employees[e] in stepup_employees:
                 model.Add(sum(day_work) <= 2)
-                shift_leader_work = sum(work[w, d, employees.index(emp)] for emp in shift_leaders)
-                model.Add(work[w, d, e] == 0).OnlyEnforceIf(shift_leader_work >= 1)
             else:
                 model.Add(sum(day_work) == 5)
-    # Ensure each step-up works at least one day overall.
+    # For each day, if any shift leader works then each step-up employee must be off.
+    for w in range(num_weeks):
+        for d in range(days_per_week):
+            for emp in stepup_employees:
+                e = employees.index(emp)
+                # Gather the work bools for all shift leaders on day (w,d)
+                leader_work = [work[w, d, employees.index(sl)] for sl in shift_leaders]
+                # Create a Boolean indicator that is true if any shift leader is working
+                leader_indicator = model.NewBoolVar(f"leader_indicator_w{w}_d{d}_{emp}")
+                model.Add(sum(leader_work) >= 1).OnlyEnforceIf(leader_indicator)
+                model.Add(sum(leader_work) == 0).OnlyEnforceIf(leader_indicator.Not())
+                # Enforce that if a leader is working then the step-up must be off.
+                model.Add(work[w, d, e] == 0).OnlyEnforceIf(leader_indicator)
     for emp in stepup_employees:
         e = employees.index(emp)
         model.Add(sum(work[w, d, e] for w in range(num_weeks) for d in range(days_per_week)) >= 1)
