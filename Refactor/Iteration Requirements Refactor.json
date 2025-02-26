@@ -1,0 +1,68 @@
+{
+  "Instructions": {
+	"description": [
+	  "Requirements that must be followed within the next rota. Must be changed every month",
+	  "Dates must be in format 'yyyy/mm/dd'"
+	]
+  },
+  "Required": {
+	"Everyone": {
+	  "Start Date": "2025/03/02"
+	},
+	"Jennifer": {
+	  "days off": [""],
+    "Early": "",
+	  "Middle": "",
+	  "Late": "",
+	  "holiday": {
+		"active": false,
+		"start": "",
+		"end": ""
+	  }
+	},
+	"Luke": {
+	  "days off": [""],
+	"Early": "",
+	  "Middle": "",
+	  "Late": "",
+	  "holiday": {
+		"active": false,
+		"start": "",
+		"end": ""
+	  }
+	},
+	"Senaka": {
+	  "days off": [""],
+	"Early": "",
+	  "Middle": "",
+	  "Late": "",
+	  "holiday": {
+		"active": false,
+		"start": "",
+		"end": ""
+	  }
+	},
+	"Stacey": {
+	  "days off": [""],
+	"Early": "",
+	  "Middle": "",
+	  "Late": "",
+	  "holiday": {
+		"active": false,
+		"start": "",
+		"end": ""
+	  }
+	},
+	"Callum": {
+	  "days off": [""],
+	"Early": "",
+	  "Middle": "",
+	  "Late": "",
+	  "holiday": {
+		"active": false,
+		"start": "",
+		"end": ""
+	  }
+	}
+  }
+}
