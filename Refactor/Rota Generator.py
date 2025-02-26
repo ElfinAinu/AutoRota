@@ -81,13 +81,13 @@ def calc_duplicate_shift_leader_penalty(model, x, shift_to_int, num_weeks, days_
 
 num_weeks = 4
 days_per_week = 7
-employees = ["Jennifer", "Luke", "Senaka", "Stacey", "Callum"]
-
-# Ensure the global stepup_employees variable is defined by loading it from Rules.json.
 script_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(script_dir, "Rules.json"), "r") as f:
     rules_data = json.load(f)
+shift_leaders = rules_data.get("employees-shift_leaders", [])
 stepup_employees = rules_data.get("employees-step_up", [])
+# Combine lists (preserving order, without duplicates)
+employees = shift_leaders + [emp for emp in stepup_employees if emp not in shift_leaders]
 shifts = ["E", "M", "L", "D/O", "H"]
 shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3, "H": 4}
 int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O", 4: "H"}
@@ -276,8 +276,6 @@ def add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shif
                     model.Add(x[w, d, i] == shift_to_int[shift]).OnlyEnforceIf(indicator)
                     model.Add(x[w, d, i] != shift_to_int[shift]).OnlyEnforceIf(indicator.Not())
                     indicators.append(indicator)
-                # model.Add(sum(indicators) <= 1)
-                # The unique shift leader constraint is removed to avoid overconstraining.
 ###############################################################################
 # 5) No Late-to-Early across week boundaries:
 #    If an employee works Late on Saturday, they cannot do Early on Sunday of next week.
@@ -562,96 +560,6 @@ def add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, d
                             current_date = rota_start + datetime.timedelta(days=w*days_per_week + d)
                             if hol_start_date.date() <= current_date.date() <= hol_end_date.date():
                                 model.Add(x[w, d, e] == shift_to_int["H"])
-    if __name__ == "__main__":
-        print("Starting rota generation...")
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-    global stepup_employees  # Declare global variable
-    json_file = os.path.join(script_dir, "Rules.json")
-    required_rules, preferred_rules = load_rules(json_file)
-
-    temp_file = os.path.join(script_dir, "Temporary Rules.json")
-    temporary_rules = load_temporary_rules(temp_file)
-
-    num_weeks = 4
-    days_per_week = 7
-    # Load from JSON: assume the loaded JSON is stored in full_json
-    with open(json_file, "r") as f:
-        full_json = json.load(f)
-    shift_leaders = full_json.get("employees-shift_leaders", [])
-    stepup_employees = full_json.get("employees-step_up", [])
-    # To keep the employees order as desired:
-    employees = shift_leaders + stepup_employees
-    shifts = ["E", "M", "L", "D/O"]
-    shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3}
-    int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O"}
-    day_name_to_index = {
-        "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3,
-        "Thursday": 4, "Friday": 5, "Saturday": 6
-    }
-
-    model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
-    # Define the global slack variables before any constraints are added that use them.
-    slack_weekend = []
-    slack_weekend_complement = []
-    slack_work_days = []
-    slack_seven_in_a_row = []
-    days_wont_work_vars = []
-    add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, len(employees))
-    add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees, stepup_employees)
-    six_in_a_row = add_consecutive_day_constraints(model, global_work, total_days, len(employees), days_per_week)
-    add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, work, num_weeks, days_per_week)
-    add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
-    weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators = add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders)
-    add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
-    add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
-    add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, days_per_week, shift_to_int)
-
-    for emp in shift_leaders:
-        if emp not in required_rules.get("Every other weekend off", []):
-            e = employees.index(emp)
-            weekend_off_indicators = []
-            # Loop over all weeks (each week is Sunday to Saturday)
-            for w in range(num_weeks):
-                # Create indicator variables for Sunday off (day index 0) and Saturday off (day index 6)
-                sunday_off = model.NewBoolVar(f"{emp}_Sunday_off_week_{w}")
-                saturday_off = model.NewBoolVar(f"{emp}_Saturday_off_week_{w}")
-                model.Add(x[w, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(sunday_off)
-                model.Add(x[w, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(sunday_off.Not())
-                model.Add(x[w, 6, e] == shift_to_int["D/O"]).OnlyEnforceIf(saturday_off)
-                model.Add(x[w, 6, e] != shift_to_int["D/O"]).OnlyEnforceIf(saturday_off.Not())
-                weekend_off_indicators.append(sunday_off)
-                weekend_off_indicators.append(saturday_off)
-            # Enforce that over the entire span at least one weekend day off is taken
-            model.Add(sum(weekend_off_indicators) >= 1)
-    add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int)
-
-    slack_weekend = []
-    slack_weekend_complement = []
-    slack_work_days = []
-    slack_seven_in_a_row = []
-
-    if "Every other weekend off" in required_rules:
-        alternating_employees = required_rules["Every other weekend off"]
-        enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks, employees, shift_to_int, alternating_employees)
-    final_obj = add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators, stepup_employees, shift_leaders, slack_weekend, slack_weekend_complement, slack_work_days, slack_seven_in_a_row)
-
-    solver = cp_model.CpSolver()
-    solver.parameters.random_seed = int(datetime.datetime.now().timestamp() * 1000) % 2147483647
-    status = solver.Solve(model)
-
-    def main():
-        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            schedule = build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift)
-            global_temp = temporary_rules["Required"].get("Everyone", {})
-            if "Start Date" in global_temp:
-                start_date = datetime.datetime.strptime(global_temp["Start Date"], "%Y/%m/%d")
-            else:
-                start_date = datetime.datetime.strptime("23/02/2025", "%d/%m/%Y")  # fallback
-            output_file = os.path.join(script_dir, "output", "rota.csv")
-            write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees, stepup_employees)
-            print("Solution found. Wrote to:", os.path.abspath(output_file))
-        else:
-            print("No solution found.")
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     temp_file = os.path.join(script_dir, "Temporary Rules.json")
