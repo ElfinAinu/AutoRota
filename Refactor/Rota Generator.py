@@ -647,6 +647,9 @@ def add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, d
         else:
             print("No solution found.")
 def main():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    temp_file = os.path.join(script_dir, "Temporary Rules.json")
+    temporary_rules = load_temporary_rules(temp_file)
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         schedule = build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift)
         global_temp = temporary_rules["Required"].get("Everyone", {})
