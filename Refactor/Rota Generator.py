@@ -239,18 +239,17 @@ def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, 
         for d in range(days_per_week):
             for e, emp in enumerate(employees):
                 allowed_set = set()
+                # Build allowed set based solely on the JSON lists.
                 if emp in required_rules.get("Will Work Late", []):
                     allowed_set.add(shift_to_int["L"])
                 if emp in required_rules.get("Will Work Middle", []):
                     allowed_set.add(shift_to_int["M"])
                 if emp in required_rules.get("Will work Early", []):
                     allowed_set.add(shift_to_int["E"])
-                # Optional: allow a step-up an additional shift ONLY if explicitly allowed.
-                if emp in stepup_employees and emp in required_rules.get("Will work Early", []):
-                    allowed_set.add(shift_to_int["E"])
-                    for shift in ["E", "M", "L"]:
-                        if shift_to_int[shift] not in allowed_set:
-                            model.Add(x[w, d, e] != shift_to_int[shift]).OnlyEnforceIf(work[w, d, e])
+                # Enforce: If employee is scheduled to work, then the assigned shift must be among allowed_set.
+                for shift in ["E", "M", "L"]:
+                    if shift_to_int[shift] not in allowed_set:
+                        model.Add(x[w, d, e] != shift_to_int[shift]).OnlyEnforceIf(work[w, d, e])
 
 def add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int):
     num_shift_leaders = len(shift_leaders)
@@ -528,8 +527,10 @@ if __name__ == "__main__":
     # Enforce that all shift leaders not required for alternating weekends get at least one full weekend off.
     for emp in shift_leaders:
         if emp not in required_rules.get("Every other weekend off", []):
-            # weekend_full_indicators[emp] is a list of indicators (one per weekend pair)
-            model.Add(sum(weekend_full_indicators[emp]) >= 1)
+            # Enforce that the employee either gets a full weekend off or, if not, then at least one singular weekend day off.
+            model.Add(sum(weekend_full_indicators[emp]) +
+                      sum(weekend_sat_only_indicators[emp]) +
+                      sum(weekend_sun_only_indicators[emp]) >= 1)
     add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int)
 
     slack_weekend = []
