@@ -295,7 +295,9 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     weekend_penalty_term = sum(weekend_slacks[emp] for emp in weekend_slacks)
 
     # 2. SHIFT PREFERENCES – Secondary Priority:
-    prefs = []
+    late_pref_sum = 0
+    early_pref_sum = 0
+    middle_pref_sum = 0
     if "Late Shifts" in preferred_rules:
         for emp in preferred_rules["Late Shifts"]:
             e = employees.index(emp)
@@ -304,7 +306,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     var_late = model.NewBoolVar(f"{emp.lower()}_late_pref_{w}_{d}")
                     model.Add(x[w, d, e] == shift_to_int["L"]).OnlyEnforceIf(var_late)
                     model.Add(x[w, d, e] != shift_to_int["L"]).OnlyEnforceIf(var_late.Not())
-                    prefs.append(var_late)
+                    late_pref_sum += var_late
     if "Early Shifts" in preferred_rules:
         for emp in preferred_rules["Early Shifts"]:
             e = employees.index(emp)
@@ -313,7 +315,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     var_early = model.NewBoolVar(f"{emp.lower()}_early_pref_{w}_{d}")
                     model.Add(x[w, d, e] == shift_to_int["E"]).OnlyEnforceIf(var_early)
                     model.Add(x[w, d, e] != shift_to_int["E"]).OnlyEnforceIf(var_early.Not())
-                    prefs.append(var_early)
+                    early_pref_sum += var_early
     if "Middle Shifts" in preferred_rules:
         for emp in preferred_rules["Middle Shifts"]:
             e = employees.index(emp)
@@ -322,9 +324,11 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     var_middle = model.NewBoolVar(f"{emp.lower()}_middle_pref_{w}_{d}")
                     model.Add(x[w, d, e] == shift_to_int["M"]).OnlyEnforceIf(var_middle)
                     model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(var_middle.Not())
-                    prefs.append(var_middle)
-    PREFERENCE_WEIGHT = 100000  # now lower than the weekend bonus
-    preference_term = sum(prefs) # prefs built from, e.g., Jennifer's late, Stacey's middle, etc.
+                    middle_pref_sum += var_middle
+    LATE_PREF_WEIGHT = 150000
+    EARLY_PREF_WEIGHT = 100000
+    MIDDLE_PREF_WEIGHT = 150000
+    preference_term = LATE_PREF_WEIGHT * late_pref_sum + EARLY_PREF_WEIGHT * early_pref_sum + MIDDLE_PREF_WEIGHT * middle_pref_sum
 
     # 3. CALLUM (or any step-up) DAY BONUS:
     #    Look into the 'Days' preference from JSON so that if a step-up (e.g., Callum) likes Friday/Sunday, we reward that.
@@ -450,6 +454,7 @@ if __name__ == "__main__":
     add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int)
 
     solver = cp_model.CpSolver()
+    solver.parameters.random_seed = int(datetime.datetime.now().timestamp() * 1000) % 2147483647
     status = solver.Solve(model)
 
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
