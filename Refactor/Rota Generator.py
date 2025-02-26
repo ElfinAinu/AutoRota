@@ -206,8 +206,31 @@ def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, 
                         if shift_to_int[shift] not in allowed_set:
                             model.Add(x[w, d, e] != shift_to_int[shift]).OnlyEnforceIf(work[w, d, e])
 
-add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, work, num_weeks, days_per_week)
-add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
+if __name__ == "__main__":
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    json_file = os.path.join(script_dir, "Rules.json")
+    required_rules, preferred_rules = load_rules(json_file)
+
+    temp_file = os.path.join(script_dir, "Temporary Rules.json")
+    temporary_rules = load_temporary_rules(temp_file)
+
+    num_weeks = 4
+    days_per_week = 7
+    employees = ["Jennifer", "Luke", "Senaka", "Stacey", "Callum"]
+    shifts = ["E", "M", "L", "D/O"]
+    shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3}
+    int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O"}
+    day_name_to_index = {
+        "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3,
+        "Thursday": 4, "Friday": 5, "Saturday": 6
+    }
+
+    model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
+    add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, len(employees))
+    add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees)
+    six_in_a_row = add_consecutive_day_constraints(model, global_work, total_days, len(employees), days_per_week)
+    add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, work, num_weeks, days_per_week)
+    add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
 ###############################################################################
 # 5) No Late-to-Early across week boundaries:
 #    If an employee works Late on Saturday, they cannot do Early on Sunday of next week.
@@ -287,7 +310,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     ])
     model.Maximize(final_obj)
 
-add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators)
+    add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators)
 
 ###############################################################################
 # Solve and output
