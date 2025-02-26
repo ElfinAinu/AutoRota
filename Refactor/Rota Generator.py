@@ -186,24 +186,6 @@ def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees
                 model.Add(sum(day_work) <= 6 + slack_work_days_var)
                 slack_work_days.append(slack_work_days_var)
 
-###############################################################################
-# 3) Consecutive days constraints:
-#    - Hard: No 7 in a row.
-#    - Soft: Discourage 6 in a row by penalizing it in the objective.
-###############################################################################
-total_days = num_weeks * days_per_week  # 28
-# Create global_work[i,e] for i in [0..27].
-global_work = {}
-def day_index(w, d):
-    return w * days_per_week + d
-
-for w in range(num_weeks):
-    for d in range(days_per_week):
-        i = day_index(w, d)
-        for e in range(len(employees)):
-            global_work[i, e] = model.NewBoolVar(f"global_work[{i},{e}]")
-            model.Add(global_work[i, e] == 1).OnlyEnforceIf(work[w, d, e])
-            model.Add(global_work[i, e] == 0).OnlyEnforceIf(work[w, d, e].Not())
 
 def add_consecutive_day_constraints(model, global_work, total_days, num_employees, days_per_week):
     # Hard: no 7 in a row.
@@ -291,14 +273,6 @@ def add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees):
 
 add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
 
-# Define shift leaders based on the JSON (or hard-code if needed)
-shift_leaders = ["Jennifer", "Luke", "Senaka", "Stacey"]
-weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators = add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders)
-
-
-###############################################################################
-# 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
-###############################################################################
 def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators, stepup_employees, shift_leaders, slack_weekend, slack_weekend_complement, slack_work_days, slack_seven_in_a_row):
     # --- Revised Objective Terms with a Hierarchy ---
 
