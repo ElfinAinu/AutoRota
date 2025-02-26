@@ -251,6 +251,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(var_middle.Not())
                     prefs.append(var_middle)
     BIG_PENALTY = 1000
+    WEEKEND_BONUS = 1000  # Define the bonus for each weekend off
     obj_expr = sum(prefs)
     penalties = sum(six_in_a_row[i, e] * BIG_PENALTY for e in range(len(employees)) for i in range(total_days - 5))
     # Penalize working days for step-up employees.
