@@ -82,6 +82,12 @@ def calc_duplicate_shift_leader_penalty(model, x, shift_to_int, num_weeks, days_
 num_weeks = 4
 days_per_week = 7
 employees = ["Jennifer", "Luke", "Senaka", "Stacey", "Callum"]
+
+# Ensure the global stepup_employees variable is defined by loading it from Rules.json.
+script_dir = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(script_dir, "Rules.json"), "r") as f:
+    rules_data = json.load(f)
+stepup_employees = rules_data.get("employees-step_up", [])
 shifts = ["E", "M", "L", "D/O", "H"]
 shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3, "H": 4}
 int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O", 4: "H"}
