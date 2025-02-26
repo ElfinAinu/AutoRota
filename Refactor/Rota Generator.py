@@ -86,34 +86,39 @@ model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_w
 # Add Weekend-off Constraint for Shift Leaders
 ###############################################################################
 def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders):
-    weekend_off_indicators = {}
-    weekend_slacks = {}
+    weekend_full_indicators = {}
+    weekend_sat_only_indicators = {}
+    weekend_sun_only_indicators = {}
     for emp in shift_leaders:
         e = employees.index(emp)
-        emp_indicators = []
-        # Loop over weeks 0 to num_weeks-2 so that we can pair Saturday and the next Sunday's off
+        full_list = []
+        sat_only_list = []
+        sun_only_list = []
         for w in range(num_weeks - 1):
-            weekend_off = model.NewBoolVar(f"weekend_off_{emp}_{w}")
-            # If weekend_off is true then Saturday of week w and Sunday of week w+1 must be off.
-            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
-            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
-            # Otherwise, at least one of these days is not off.
-            not_sat_off = model.NewBoolVar(f"not_off_sat_{emp}_{w}")
-            model.Add(x[w, days_per_week - 1, e] != shift_to_int["D/O"]).OnlyEnforceIf(not_sat_off)
-            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(not_sat_off.Not())
-            
-            not_sun_off = model.NewBoolVar(f"not_off_sun_{emp}_{w}")
-            model.Add(x[w+1, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(not_sun_off)
-            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(not_sun_off.Not())
-            
-            model.AddBoolOr([not_sat_off, not_sun_off]).OnlyEnforceIf(weekend_off.Not())
-            emp_indicators.append(weekend_off)
-        # Instead of a hard constraint, a slack variable allows the model to sacrifice a weekend off at heavy cost.
-        slack = model.NewIntVar(0, 1, f"weekend_slack_{emp}")
-        model.Add(sum(emp_indicators) + slack >= 1)
-        weekend_slacks[emp] = slack
-        weekend_off_indicators[emp] = emp_indicators
-    return weekend_off_indicators, weekend_slacks
+            # Reify Saturday off condition (Saturday of week w)
+            sat_off = model.NewBoolVar(f"{emp}_sat_off_{w}")
+            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(sat_off)
+            model.Add(x[w, days_per_week - 1, e] != shift_to_int["D/O"]).OnlyEnforceIf(sat_off.Not())
+            # Reify Sunday off condition (Sunday of week w+1)
+            sun_off = model.NewBoolVar(f"{emp}_sun_off_{w}")
+            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(sun_off)
+            model.Add(x[w+1, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(sun_off.Not())
+            # Full weekend off indicator: both Saturday and Sunday off.
+            weekend_full = model.NewBoolVar(f"{emp}_weekend_full_{w}")
+            model.AddBoolAnd([sat_off, sun_off]).OnlyEnforceIf(weekend_full)
+            # Partial: Saturday only off.
+            weekend_sat_only = model.NewBoolVar(f"{emp}_weekend_sat_only_{w}")
+            model.AddBoolAnd([sat_off, sun_off.Not()]).OnlyEnforceIf(weekend_sat_only)
+            # Partial: Sunday only off.
+            weekend_sun_only = model.NewBoolVar(f"{emp}_weekend_sun_only_{w}")
+            model.AddBoolAnd([sun_off, sat_off.Not()]).OnlyEnforceIf(weekend_sun_only)
+            full_list.append(weekend_full)
+            sat_only_list.append(weekend_sat_only)
+            sun_only_list.append(weekend_sun_only)
+        weekend_full_indicators[emp] = full_list
+        weekend_sat_only_indicators[emp] = sat_only_list
+        weekend_sun_only_indicators[emp] = sun_only_list
+    return weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators
 
 def add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders):
     for w in range(num_weeks):
