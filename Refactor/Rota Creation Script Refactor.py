@@ -4,7 +4,9 @@ import csv
 import os
 import json
 
-with open("Re Refactored Rules.json", "r") as f:
+script_dir = os.path.dirname(os.path.abspath(__file__))
+json_file = os.path.join(script_dir, "Re Refactored Rules.json")
+with open(json_file, "r") as f:
     refactored_rules = json.load(f)
 required_rules = refactored_rules["Rules"]["required"]
 preferred_rules = refactored_rules["Rules"].get("preferred", {})
