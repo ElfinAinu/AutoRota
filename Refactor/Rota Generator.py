@@ -284,11 +284,6 @@ add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
 shift_leaders = ["Jennifer", "Luke", "Senaka", "Stacey"]
 weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators = add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders)
 
-# Enforce that all shift leaders not required for alternating weekends get at least one full weekend off.
-for emp in shift_leaders:
-    if emp not in required_rules.get("Every other weekend off", []):
-        # weekend_full_indicators[emp] is a list of indicators (one per weekend pair)
-        model.Add(sum(weekend_full_indicators[emp]) >= 1)
 
 ###############################################################################
 # 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
@@ -529,6 +524,12 @@ if __name__ == "__main__":
     weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators = add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders)
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
     add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
+
+    # Enforce that all shift leaders not required for alternating weekends get at least one full weekend off.
+    for emp in shift_leaders:
+        if emp not in required_rules.get("Every other weekend off", []):
+            # weekend_full_indicators[emp] is a list of indicators (one per weekend pair)
+            model.Add(sum(weekend_full_indicators[emp]) >= 1)
     add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int)
 
     slack_weekend = []
