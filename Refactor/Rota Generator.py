@@ -300,13 +300,13 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(var_middle.Not())
                     prefs.append(var_middle)
     BIG_PENALTY = 1000
-    WEEKEND_BONUS = 1000  # Define the bonus for each weekend off
+    WEEKEND_BONUS = 5000  # Increased bonus for each full weekend off
     WEEKEND_PENALTY = 2000  # heavy penalty for missing a weekend off
     weekend_penalty_term = sum(weekend_slacks[emp] for emp in weekend_slacks)
     obj_expr = sum(prefs)
     penalties = sum(six_in_a_row[i, e] * BIG_PENALTY for e in range(len(employees)) for i in range(total_days - 5))
     # Penalize working days for step-up employees.
-    stepup_penalty_factor = 100  # adjust value as needed
+    stepup_penalty_factor = 200  # Higher penalty for step-up usage
     stepup_employees = ["Callum"]  # You can also extract this from JSON
     stepup_penalty = 0
     for emp in stepup_employees:
