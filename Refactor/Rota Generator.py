@@ -130,11 +130,11 @@ def enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks,
         for w in range(0, num_weeks - 1, 2):
             # Designated off days:
             # Even week: Saturday must be off.
-            slack_weekend = model.NewIntVar(0, 1, f"slack_weekend_{w}_{e}")
-            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(slack_weekend.Not())
+            slack_weekend_var = model.NewIntVar(0, 1, f"slack_weekend_{w}_{e}")
+            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(slack_weekend_var.Not())
             slack_weekend.append(slack_weekend_var)
-            slack_weekend_complement = model.NewIntVar(0, 1, f"slack_weekend_complement_{w}_{e}")
-            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(slack_weekend_complement.Not())
+            slack_weekend_complement_var = model.NewIntVar(0, 1, f"slack_weekend_complement_{w}_{e}")
+            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(slack_weekend_complement_var.Not())
             slack_weekend_complement.append(slack_weekend_complement_var)
             # Even week: Sunday must be working.
             model.Add(x[w, 0, e] != shift_to_int["D/O"])
@@ -216,8 +216,8 @@ def add_consecutive_day_constraints(model, global_work, total_days, num_employee
     slack_seven_in_a_row = []
     for e in range(num_employees):
         for i in range(total_days - 6):
-            slack_seven_in_a_row = model.NewIntVar(0, 1, f"slack_seven_in_a_row_{i}_{e}")
-            model.Add(sum(global_work[j, e] for j in range(i, i + 7)) <= 6 + slack_seven_in_a_row)
+            slack_seven_in_a_row_var = model.NewIntVar(0, 1, f"slack_seven_in_a_row_{i}_{e}")
+            model.Add(sum(global_work[j, e] for j in range(i, i + 7)) <= 6 + slack_seven_in_a_row_var)
             slack_seven_in_a_row.append(slack_seven_in_a_row_var)
     # Soft: Track six-in-a-row occurrences.
     six_in_a_row = {}
@@ -535,6 +535,11 @@ if __name__ == "__main__":
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
     add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
     add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int)
+
+    slack_weekend = []
+    slack_weekend_complement = []
+    slack_work_days = []
+    slack_seven_in_a_row = []
 
     if "Every other weekend off" in required_rules:
         alternating_employees = required_rules["Every other weekend off"]
