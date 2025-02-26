@@ -123,10 +123,23 @@ def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, s
 def enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks, employees, shift_to_int, alternating_employees):
     for emp in alternating_employees:
         e = employees.index(emp)
-        # For every even weekend pair (using weeks 0,2,...), force a full weekend off.
+        # For each consecutive pair of weeks (even week and the following odd week)
         for w in range(0, num_weeks - 1, 2):
-            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"])  # Saturday off in week w
-            model.Add(x[w+1, 0, e] == shift_to_int["D/O"])                # Sunday off in week w+1
+            # Designated off days:
+            # Even week: Saturday must be off.
+            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"])
+            # Odd week: Sunday must be off.
+            model.Add(x[w+1, 0, e] == shift_to_int["D/O"])
+            # Conversely, enforce that the complementary weekend days are working:
+            # Even week: Sunday must be working.
+            model.Add(x[w, 0, e] != shift_to_int["D/O"])
+            # Odd week: Saturday must be working.
+            model.Add(x[w+1, days_per_week - 1, e] != shift_to_int["D/O"])
+        # If the horizon has an odd number of weeks, enforce that in the last week both weekend days are working.
+        if num_weeks % 2 == 1:
+            w = num_weeks - 1
+            model.Add(x[w, 0, e] != shift_to_int["D/O"])
+            model.Add(x[w, days_per_week - 1, e] != shift_to_int["D/O"])
 
 def add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders):
     for w in range(num_weeks):
