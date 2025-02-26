@@ -292,20 +292,22 @@ add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
 
 # Define shift leaders based on the JSON (or hard-code if needed)
 shift_leaders = ["Jennifer", "Luke", "Senaka", "Stacey"]
-weekend_off_indicators, weekend_slacks = add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders)
+weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators = add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders)
 
 ###############################################################################
 # 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
 ###############################################################################
-def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, stepup_employees, shift_leaders):
+def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators, stepup_employees, shift_leaders):
     # --- Revised Objective Terms with a Hierarchy ---
 
     # 1. WEEKEND OFF TERMS – Highest Priority:
     #    For each shift leader, every full weekend off yields a huge reward.
-    WEEKEND_BONUS = 500000    # reward per weekend off achieved
-    WEEKEND_PENALTY = 500000  # penalty per unit of weekend slack (if weekend off isn’t achieved)
-    weekend_bonus = sum(weekend for emp in weekend_off_indicators for weekend in weekend_off_indicators[emp])
-    weekend_penalty_term = sum(weekend_slacks[emp] for emp in weekend_slacks)
+    WEEKEND_BONUS_FULL = 500000    # reward per full weekend off achieved
+    WEEKEND_BONUS_PARTIAL = 250000  # reward per singular weekend day off achieved
+    weekend_full_reward = sum(ind for emp in weekend_full_indicators for ind in weekend_full_indicators[emp])
+    weekend_partial_reward = sum(ind for emp in weekend_sat_only_indicators for ind in weekend_sat_only_indicators[emp]) + \
+                             sum(ind for emp in weekend_sun_only_indicators for ind in weekend_sun_only_indicators[emp])
+    weekend_reward_term = WEEKEND_BONUS_FULL * weekend_full_reward + WEEKEND_BONUS_PARTIAL * weekend_partial_reward
 
     # 2. SHIFT PREFERENCES – Secondary Priority:
     late_pref_sum = 0
@@ -406,7 +408,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     # 6. Final Objective Assembly – use a weighted sum that imposes our strict hierarchy:
     final_obj = cp_model.LinearExpr.Sum([
         # (a) Weekend off is top: reward (minus penalty if missing)
-        WEEKEND_BONUS * weekend_bonus - WEEKEND_PENALTY * weekend_penalty_term,
+        weekend_reward_term,
         # (b) Next, individual shift preferences.
         preference_term,
         # (c) Then, the bonus for a step-up (e.g., Callum) working on his preferred days.
@@ -494,7 +496,7 @@ if __name__ == "__main__":
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
     add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
     add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int)
-    final_obj = add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, stepup_employees, shift_leaders)
+    final_obj = add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators, stepup_employees, shift_leaders)
 
     solver = cp_model.CpSolver()
     solver.parameters.random_seed = int(datetime.datetime.now().timestamp() * 1000) % 2147483647
