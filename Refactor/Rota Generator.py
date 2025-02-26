@@ -29,6 +29,9 @@ day_name_to_index = {
 }
 
 def initialize_model(num_weeks, days_per_week, employees, shift_to_int):
+    global slack_work_days, days_wont_work_vars  # Declare global variables
+    slack_work_days = []
+    days_wont_work_vars = []
     model = cp_model.CpModel()
     num_employees = len(employees)
     x = {}
@@ -554,6 +557,7 @@ def add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, d
                             if hol_start_date.date() <= current_date.date() <= hol_end_date.date():
                                 model.Add(x[w, d, e] == shift_to_int["H"])
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    global stepup_employees  # Declare global variable
     json_file = os.path.join(script_dir, "Rules.json")
     required_rules, preferred_rules = load_rules(json_file)
 
