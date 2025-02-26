@@ -179,7 +179,7 @@ add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week,
 #    - Callum works at most 2 days per week, and optionally at least 1 overall.
 ###############################################################################
 def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees, stepup_employees):
-    global slack_work_days  # Add this line to access the global slack_work_days list
+    global slack_work_days   # Access the global slack_work_days list
     for w in range(num_weeks):
         for e in range(len(employees)):
             day_work = [work[w, d, e] for d in range(days_per_week)]
@@ -527,6 +527,11 @@ if __name__ == "__main__":
     }
 
     model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
+    # Define the global slack variables before any constraints are added that use them.
+    slack_weekend = []
+    slack_weekend_complement = []
+    slack_work_days = []
+    slack_seven_in_a_row = []
     add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, len(employees))
     add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees, stepup_employees)
     six_in_a_row = add_consecutive_day_constraints(model, global_work, total_days, len(employees), days_per_week)
