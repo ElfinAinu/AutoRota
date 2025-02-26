@@ -122,29 +122,12 @@ def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, s
     return weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators
 
 def enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks, employees, shift_to_int, alternating_employees):
-    slack_weekend = []
-    slack_weekend_complement = []
     for emp in alternating_employees:
         e = employees.index(emp)
-        # For each consecutive pair of weeks (even week and the following odd week)
         for w in range(0, num_weeks - 1, 2):
-            # Designated off days:
-            # Even week: Saturday must be off.
-            slack_weekend_var = model.NewIntVar(0, 1, f"slack_weekend_{w}_{e}")
-            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(slack_weekend_var.Not())
-            slack_weekend.append(slack_weekend_var)
-            slack_weekend_complement_var = model.NewIntVar(0, 1, f"slack_weekend_complement_{w}_{e}")
-            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(slack_weekend_complement_var.Not())
-            slack_weekend_complement.append(slack_weekend_complement_var)
-            # Even week: Sunday must be working.
-            model.Add(x[w, 0, e] != shift_to_int["D/O"])
-            # Odd week: Saturday must be working.
-            model.Add(x[w+1, days_per_week - 1, e] != shift_to_int["D/O"])
-        # If the horizon has an odd number of weeks, enforce that in the last week both weekend days are working.
-        if num_weeks % 2 == 1:
-            w = num_weeks - 1
-            model.Add(x[w, 0, e] != shift_to_int["D/O"])
-            model.Add(x[w, days_per_week - 1, e] != shift_to_int["D/O"])
+            # Ensure full weekend off in even weeks
+            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"])
+            model.Add(x[w+1, 0, e] == shift_to_int["D/O"])
 
 def add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders):
     for w in range(num_weeks):
@@ -249,7 +232,7 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
             e = employees.index(emp)
             day_idx = day_name_to_index[day]
             for w in range(num_weeks):
-                model.Add(x[w, day_idx, e] == shift_to_int["D/O"])
+                model.Add(x[w, day_idx, e] == shift_to_int["D/O"]).OnlyEnforceIf(work[w, day_idx, e].Not())
 
 def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week):
     for w in range(num_weeks):
