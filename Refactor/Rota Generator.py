@@ -383,7 +383,6 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
 ###############################################################################
 solver = cp_model.CpSolver()
 solver.parameters.random_seed = int(datetime.datetime.now().timestamp())
-solver.parameters.search_branching = cp_model.AutoSearch  # or use a different strategy to induce diversification
 status = solver.Solve(model)
 
 
