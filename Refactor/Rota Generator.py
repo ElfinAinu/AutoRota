@@ -285,7 +285,7 @@ weekend_off_indicators, weekend_slacks = add_weekend_off_constraints(model, x, n
 # 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
 ###############################################################################
 def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, stepup_employees):
-    PREFERENCE_WEIGHT = 20000
+    PREFERENCE_WEIGHT = 100000
     prefs = []
     if "Late Shifts" in preferred_rules:
         for emp in preferred_rules["Late Shifts"]:
@@ -321,7 +321,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     obj_expr = PREFERENCE_WEIGHT * sum(prefs)
     penalties = sum(six_in_a_row[i, e] * BIG_PENALTY for e in range(len(employees)) for i in range(total_days - 5))
     # Penalize working days for step-up employees.
-    stepup_penalty_factor = 1000
+    stepup_penalty_factor = 500
     weekend_coverage_bonus = []
     for w in range(num_weeks):
         for d in [0, days_per_week - 1]:
@@ -340,7 +340,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     # Accumulate bonus from weekend off indicators for each shift leader.
     weekend_bonus = sum(weekend for emp in weekend_off_indicators for weekend in weekend_off_indicators[emp])
   
-    DUPLICATE_PENALTY = 5000
+    DUPLICATE_PENALTY = 3000
     duplicate_penalty = calc_duplicate_shift_leader_penalty(model, x, shift_to_int, num_weeks, days_per_week, shift_leaders, DUPLICATE_PENALTY)
 
     final_obj = cp_model.LinearExpr.Sum([
