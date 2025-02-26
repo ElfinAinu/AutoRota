@@ -175,9 +175,6 @@ def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees
                 model.Add(sum(leader_work) == 0).OnlyEnforceIf(leader_indicator.Not())
                 # Enforce that if a leader is working then the step-up must be off.
                 model.Add(work[w, d, e] == 0).OnlyEnforceIf(leader_indicator)
-    for emp in stepup_employees:
-        e = employees.index(emp)
-        model.Add(sum(work[w, d, e] for w in range(num_weeks) for d in range(days_per_week)) >= 1)
 
 ###############################################################################
 # 3) Consecutive days constraints:
@@ -233,23 +230,6 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
             day_idx = day_name_to_index[day]
             for w in range(num_weeks):
                 model.Add(x[w, day_idx, e] == shift_to_int["D/O"])
-    for e, emp in enumerate(employees):
-        if emp not in stepup_employees:
-            weekend_off_vars = []
-            for i in range(num_weeks - 1):
-                weekend_off_i = model.NewBoolVar(f"{emp}_weekend_off_{i}")
-                # Reify Saturday off condition for week i.
-                sat_off = model.NewBoolVar(f"{emp}_sat_off_{i}")
-                model.Add(x[i, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(sat_off)
-                model.Add(x[i, days_per_week - 1, e] != shift_to_int["D/O"]).OnlyEnforceIf(sat_off.Not())
-                # Reify Sunday off condition for week i+1.
-                sun_off = model.NewBoolVar(f"{emp}_sun_off_{i}")
-                model.Add(x[i+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(sun_off)
-                model.Add(x[i+1, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(sun_off.Not())
-                # Combine the two conditions.
-                model.AddBoolAnd([sat_off, sun_off]).OnlyEnforceIf(weekend_off_i)
-                weekend_off_vars.append(weekend_off_i)
-            model.Add(sum(weekend_off_vars) >= 1)
 
 def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week):
     for w in range(num_weeks):
@@ -411,7 +391,34 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     duplicate_penalty = calc_duplicate_shift_leader_penalty(model, x, shift_to_int, num_weeks, days_per_week, shift_leaders, DUPLICATE_PENALTY)
 
     # 6. Final Objective Assembly – use a weighted sum that imposes our strict hierarchy:
-    final_obj = cp_model.LinearExpr.Sum([
+    # --- (NEW) Daily Early/Late Preference Soft Penalization ---
+    EARLY_EXCESS_PENALTY = 20000
+    LATE_EXCESS_PENALTY = 20000
+    extra_early_penalty_term = 0
+    extra_late_penalty_term = 0
+    for w in range(num_weeks):
+        for d in range(days_per_week):
+            early_indicators = []
+            late_indicators = []
+            for e in range(len(employees)):
+                early_b = model.NewBoolVar(f"pref_early_{w}_{d}_{e}")
+                late_b  = model.NewBoolVar(f"pref_late_{w}_{d}_{e}")
+                model.Add(x[w, d, e] == shift_to_int["E"]).OnlyEnforceIf(early_b)
+                model.Add(x[w, d, e] != shift_to_int["E"]).OnlyEnforceIf(early_b.Not())
+                model.Add(x[w, d, e] == shift_to_int["L"]).OnlyEnforceIf(late_b)
+                model.Add(x[w, d, e] != shift_to_int["L"]).OnlyEnforceIf(late_b.Not())
+                early_indicators.append(early_b)
+                late_indicators.append(late_b)
+            early_count = model.NewIntVar(1, len(employees), f"early_count_{w}_{d}")
+            late_count  = model.NewIntVar(1, len(employees), f"late_count_{w}_{d}")
+            model.Add(early_count == sum(early_indicators))
+            model.Add(late_count  == sum(late_indicators))
+            extra_early = model.NewIntVar(0, len(employees)-1, f"extra_early_{w}_{d}")
+            extra_late  = model.NewIntVar(0, len(employees)-1, f"extra_late_{w}_{d}")
+            model.Add(extra_early == early_count - 1)
+            model.Add(extra_late == late_count - 1)
+            extra_early_penalty_term += extra_early
+            extra_late_penalty_term  += extra_late
         # (a) Weekend off is top: reward (minus penalty if missing)
         weekend_reward_term,
         # (b) Next, individual shift preferences.
@@ -424,6 +431,9 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
         - six_penalties,
         - duplicate_penalty,
         - OFF_DAY_GROUPING_PENALTY * off_day_penalty_expr
+        # (f) NEW: Penalize extra early and late shifts beyond 1 per day.
+        - EARLY_EXCESS_PENALTY * extra_early_penalty_term,
+        - LATE_EXCESS_PENALTY * extra_late_penalty_term
     ])
     model.Maximize(final_obj)
     return final_obj
