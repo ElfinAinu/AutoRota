@@ -468,7 +468,5 @@ if __name__ == "__main__":
         output_file = os.path.join(script_dir, "output", "rota.csv")
         write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees)
         print("Solution found. Wrote to:", os.path.abspath(output_file))
-        best_obj = solver.ObjectiveValue()
-        print("Optimal objective value:", best_obj)
     else:
         print("No solution found.")
