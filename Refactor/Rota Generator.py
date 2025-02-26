@@ -215,7 +215,7 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
             e = employees.index(emp)
             day_idx = day_name_to_index[day]
             for w in range(num_weeks):
-                model.Add(x[w, day_idx, e] == shift_to_int["D/O"])
+                model.Add(x[w, day_idx, e] == shift_to_int["D/O"]).OnlyEnforceIf(work[w, day_idx, e].Not())
     if "Every other weekend off" in required_rules:
         for emp in required_rules["Every other weekend off"]:
             e = employees.index(emp)
@@ -290,8 +290,8 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
 
     # 1. WEEKEND OFF TERMS – Highest Priority:
     #    For each shift leader, every full weekend off yields a huge reward.
-    WEEKEND_BONUS = 300000    # reward per weekend off achieved
-    WEEKEND_PENALTY = 300000  # penalty per unit of weekend slack (if weekend off isn’t achieved)
+    WEEKEND_BONUS = 500000    # reward per weekend off achieved
+    WEEKEND_PENALTY = 500000  # penalty per unit of weekend slack (if weekend off isn’t achieved)
     weekend_bonus = sum(weekend for emp in weekend_off_indicators for weekend in weekend_off_indicators[emp])
     weekend_penalty_term = sum(weekend_slacks[emp] for emp in weekend_slacks)
 
@@ -327,13 +327,13 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(var_middle.Not())
                     middle_pref_sum += var_middle
     LATE_PREF_WEIGHT = 150000
-    EARLY_PREF_WEIGHT = 100000
+    EARLY_PREF_WEIGHT = 120000
     MIDDLE_PREF_WEIGHT = 150000
     preference_term = LATE_PREF_WEIGHT * late_pref_sum + EARLY_PREF_WEIGHT * early_pref_sum + MIDDLE_PREF_WEIGHT * middle_pref_sum
 
     # 3. CALLUM (or any step-up) DAY BONUS:
     #    Look into the 'Days' preference from JSON so that if a step-up (e.g., Callum) likes Friday/Sunday, we reward that.
-    CALLUM_DAY_BONUS_WEIGHT = 50000
+    CALLUM_DAY_BONUS_WEIGHT = 100000
     callup_day_bonus = 0
     if "Days" in preferred_rules:
         # Create an inverse mapping for day names if needed.
@@ -360,7 +360,18 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
             for d in range(days_per_week):
                 stepup_penalty += work[w, d, e]
 
-    # 5. OTHER PENALTIES (six in a row & duplicate shift leader assignments)
+    # 5. OFF-DAY GROUPING PENALTY
+    OFF_DAY_GROUPING_PENALTY = 2000
+    off_day_penalty = 0
+    for e in range(len(employees)):
+        for w in range(num_weeks):
+            for d in range(1, days_per_week - 1):
+                if employees[e] in shift_leaders:
+                    off_day_penalty += model.NewBoolVar(f"off_day_penalty_{w}_{d}_{e}")
+                    model.AddBoolAnd([work[w, d-1, e].Not(), work[w, d+1, e].Not()]).OnlyEnforceIf(off_day_penalty)
+                    model.AddBoolOr([work[w, d-1, e], work[w, d+1, e]]).OnlyEnforceIf(off_day_penalty.Not())
+
+    # 6. OTHER PENALTIES (six in a row & duplicate shift leader assignments)
     SIX_IN_A_ROW_PENALTY = 1000
     EXTRA_SHIFT_LEADER_PENALTY = 500  # Additional penalty for any shift leader
     six_penalties = 0
@@ -385,7 +396,8 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
         - STEPUP_PENALTY_FACTOR * stepup_penalty,
         # (e) Also subtract other penalties:
         - six_penalties,
-        - duplicate_penalty
+        - duplicate_penalty,
+        - OFF_DAY_GROUPING_PENALTY * off_day_penalty
     ])
     model.Maximize(final_obj)
     return final_obj
