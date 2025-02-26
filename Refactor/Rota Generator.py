@@ -556,7 +556,9 @@ def add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, d
                             current_date = rota_start + datetime.timedelta(days=w*days_per_week + d)
                             if hol_start_date.date() <= current_date.date() <= hol_end_date.date():
                                 model.Add(x[w, d, e] == shift_to_int["H"])
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if __name__ == "__main__":
+        print("Starting rota generation...")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
     global stepup_employees  # Declare global variable
     json_file = os.path.join(script_dir, "Rules.json")
     required_rules, preferred_rules = load_rules(json_file)
@@ -631,15 +633,16 @@ def add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, d
     solver.parameters.random_seed = int(datetime.datetime.now().timestamp() * 1000) % 2147483647
     status = solver.Solve(model)
 
-    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        schedule = build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift)
-        global_temp = temporary_rules["Required"].get("Everyone", {})
-        if "Start Date" in global_temp:
-            start_date = datetime.datetime.strptime(global_temp["Start Date"], "%Y/%m/%d")
+    def main():
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            schedule = build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift)
+            global_temp = temporary_rules["Required"].get("Everyone", {})
+            if "Start Date" in global_temp:
+                start_date = datetime.datetime.strptime(global_temp["Start Date"], "%Y/%m/%d")
+            else:
+                start_date = datetime.datetime.strptime("23/02/2025", "%d/%m/%Y")  # fallback
+            output_file = os.path.join(script_dir, "output", "rota.csv")
+            write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees)
+            print("Solution found. Wrote to:", os.path.abspath(output_file))
         else:
-            start_date = datetime.datetime.strptime("23/02/2025", "%d/%m/%Y")  # fallback
-        output_file = os.path.join(script_dir, "output", "rota.csv")
-        write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees)
-        print("Solution found. Wrote to:", os.path.abspath(output_file))
-    else:
-        print("No solution found.")
+            print("No solution found.")
