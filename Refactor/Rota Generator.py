@@ -155,6 +155,8 @@ def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees
             # otherwise, they must work exactly 5 days per week.
             if employees[e] in stepup_employees:
                 model.Add(sum(day_work) <= 2)
+                shift_leader_work = sum(work[w, d, employees.index(emp)] for emp in shift_leaders)
+                model.Add(work[w, d, e] == 0).OnlyEnforceIf(shift_leader_work >= 1)
             else:
                 model.Add(sum(day_work) == 5)
     # Ensure each step-up works at least one day overall.
@@ -215,24 +217,16 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
             e = employees.index(emp)
             day_idx = day_name_to_index[day]
             for w in range(num_weeks):
-                model.Add(x[w, day_idx, e] == shift_to_int["D/O"]).OnlyEnforceIf(work[w, day_idx, e].Not())
-    if "Every other weekend off" in required_rules:
-        for emp in required_rules["Every other weekend off"]:
-            e = employees.index(emp)
+                model.Add(x[w, day_idx, e] == shift_to_int["D/O"])
+    for e, emp in enumerate(employees):
+        if emp not in stepup_employees:
             weekend_off_vars = []
-            # For each weekend defined by week i (Saturday) and week i+1 (Sunday)
             for i in range(num_weeks - 1):
                 weekend_off_i = model.NewBoolVar(f"{emp}_weekend_off_{i}")
-                # Enforce that if weekend_off_i is true then both Saturday of week i and Sunday of week i+1 are off
-                model.Add(x[i, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off_i)
-                model.Add(x[i, days_per_week - 1, e] != shift_to_int["D/O"]).OnlyEnforceIf(weekend_off_i.Not())
-                model.Add(x[i+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off_i)
-                model.Add(x[i+1, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(weekend_off_i.Not())
+                model.AddBoolAnd([x[i, days_per_week - 1, e] == shift_to_int["D/O"],
+                                  x[i+1, 0, e] == shift_to_int["D/O"]]).OnlyEnforceIf(weekend_off_i)
                 weekend_off_vars.append(weekend_off_i)
-            # Enforce that exactly the required number of weekends are off.
-            # (For example, if there are 3 weekends (num_weeks - 1 = 3), require 3//2 = 1 full weekend off.)
-            required_off = (num_weeks - 1) // 2
-            model.Add(sum(weekend_off_vars) >= required_off)
+            model.Add(sum(weekend_off_vars) >= 1)
 
 def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week):
     for w in range(num_weeks):
@@ -371,7 +365,11 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     off_day_penalty_terms.append(off_day_var)
                     model.AddBoolAnd([work[w, d-1, e].Not(), work[w, d+1, e].Not()]).OnlyEnforceIf(off_day_var)
                     model.AddBoolOr([work[w, d-1, e], work[w, d+1, e]]).OnlyEnforceIf(off_day_var.Not())
-    off_day_penalty_expr = cp_model.LinearExpr.Sum(off_day_penalty_terms)
+    for e in range(len(employees)):
+        if employees[e] in shift_leaders:
+            for w in range(num_weeks):
+                for d in range(1, days_per_week - 1):
+                    model.AddBoolOr([work[w, d-1, e].Not(), work[w, d, e], work[w, d+1, e].Not()])
 
     # 6. OTHER PENALTIES (six in a row & duplicate shift leader assignments)
     off_day_penalty_expr = cp_model.LinearExpr.Sum(off_day_penalty_terms)
