@@ -646,3 +646,5 @@ def add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, d
             print("Solution found. Wrote to:", os.path.abspath(output_file))
         else:
             print("No solution found.")
+if __name__ == "__main__":
+    main()
