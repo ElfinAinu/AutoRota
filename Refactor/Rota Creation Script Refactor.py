@@ -257,7 +257,8 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
             for d in range(days_per_week):
                 stepup_penalty += work[w, d, e]
     # Modify the maximize to subtract the stepup penalty as well.
-    model.Maximize(obj_expr - penalties - stepup_penalty_factor * stepup_penalty)
+    final_obj = model.Sum([obj_expr, -penalties, -stepup_penalty_factor * stepup_penalty])
+    model.Maximize(final_obj)
 
 add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days)
 
