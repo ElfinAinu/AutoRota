@@ -370,7 +370,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
         # (a) Weekend off is top: reward (minus penalty if missing)
         WEEKEND_BONUS * weekend_bonus - WEEKEND_PENALTY * weekend_penalty_term,
         # (b) Next, individual shift preferences.
-        PREFERENCE_WEIGHT * preference_term,
+        preference_term,
         # (c) Then, the bonus for a step-up (e.g., Callum) working on his preferred days.
         CALLUM_DAY_BONUS_WEIGHT * callup_day_bonus,
         # (d) Then subtract step-up usage penalty.
