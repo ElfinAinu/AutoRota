@@ -5,7 +5,7 @@ import os
 import json
 import random
 
-# --- Loading rules from JSON files ---
+# --- Loading Rules ---
 
 def load_rules(json_filepath):
     with open(json_filepath, "r") as f:
@@ -19,7 +19,7 @@ def load_temporary_rules(json_filepath):
         temp_rules = json.load(f)
     return temp_rules
 
-# Mapping day names to indices.
+# --- Day Name Mapping ---
 day_name_to_index = {
     "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3,
     "Thursday": 4, "Friday": 5, "Saturday": 6
@@ -37,9 +37,8 @@ def initialize_model(num_weeks, days_per_week, employees, shift_to_int):
                 x[w, d, e] = model.NewIntVar(0, 4, f"x[{w},{d},{e}]")
     return model, x
 
-# --- Allowed Shift Constraints ---
-# For each day, if an employee is not listed as eligible for a given working shift (Early, Middle, Late)
-# in the "Will Work ..." lists from required_rules, then that shift is forbidden.
+# --- Allowed Shifts Constraint ---
+# For each employee/day, if they are not listed in a "Will Work ..." list, forbid that working shift.
 def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, num_weeks, days_per_week):
     for w in range(num_weeks):
         for d in range(days_per_week):
@@ -55,19 +54,19 @@ def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, num_we
                     if shift_to_int[shift] not in allowed:
                         model.Add(x[w, d, e] != shift_to_int[shift])
 
-# --- Alternating Weekend Off ---
-# For employees designated in the "Every other weekend off" list, enforce that in every alternate pair of weeks,
-# they get a full weekend off (Saturday of week w and Sunday of week w+1).
+# --- Alternating Weekend Off Constraint ---
+# For employees in the alternating list, force Saturday (last day of week) of one week and Sunday (first day of next week) off.
 def enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks, employees, shift_to_int, alternating_employees):
     for emp in alternating_employees:
         e = employees.index(emp)
         for w in range(0, num_weeks - 1, 2):
-            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"])  # Saturday off in week w.
-            model.Add(x[w+1, 0, e] == shift_to_int["D/O"])                # Sunday off in week w+1.
+            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"])
+            model.Add(x[w+1, 0, e] == shift_to_int["D/O"])
 
 # --- Daily Coverage Constraints ---
-# Each day must have at least one Early and one Late assigned.
-# Middles are not required. In addition, the total number of working slots (Early, Middle, or Late) is capped at 3.
+# Each day must have at least one Early and one Late.
+# (We no longer require a Middle; working slots now are simply any assignment in {E, M, L}).
+# Also, instead of forcing a cap of 3 per day, we allow up to 4 working slots.
 def add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, employees):
     num_employees = len(employees)
     for w in range(num_weeks):
@@ -76,7 +75,7 @@ def add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_w
             late_vars = []
             working_vars = []
             for e in range(num_employees):
-                # Working if assigned any of Early, Middle, or Late (values 0, 1, or 2).
+                # Working if assigned Early, Middle, or Late (values 0,1,2)
                 is_working = model.NewBoolVar(f"working_{w}_{d}_{e}")
                 model.Add(x[w, d, e] <= shift_to_int["L"]).OnlyEnforceIf(is_working)
                 model.Add(x[w, d, e] > shift_to_int["L"]).OnlyEnforceIf(is_working.Not())
@@ -91,14 +90,13 @@ def add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_w
                 late_vars.append(b_late)
             model.Add(sum(early_vars) >= 1)
             model.Add(sum(late_vars) >= 1)
-            model.Add(sum(working_vars) <= 3)
+            model.Add(sum(working_vars) <= 4)
 
 # --- Step-Up Priority Constraint ---
-# For each shift slot, if a non–step‑up employee (shift leader) is assigned, then no step‑up is used for that slot.
+# For a given shift slot, if a non–step‑up (shift leader) is assigned then a step‑up should not be used.
 def add_stepup_priority(model, x, shift_to_int, num_weeks, days_per_week, employees, stepup_employees):
     num_employees = len(employees)
     non_stepup_indices = [i for i, emp in enumerate(employees) if emp not in stepup_employees]
-    stepup_indices = [i for i, emp in enumerate(employees) if emp in stepup_employees]
     for w in range(num_weeks):
         for d in range(days_per_week):
             for shift in ["E", "M", "L"]:
@@ -118,9 +116,11 @@ def add_stepup_priority(model, x, shift_to_int, num_weeks, days_per_week, employ
                 model.Add(stepup_sum == sum(stepup_bools))
                 model.Add(stepup_sum <= 1 - non_stepup_sum)
 
-# --- Employee-Specific Constraints ---
-# Enforce the "Working Days" requirement and unavailable days ("Days won't work") from required_rules.
+# --- Employee-Specific Constraints with Slack ---
+# For each employee with a "Working Days" requirement, we now allow a slack variable so that if temporary rules force off days,
+# the model can deviate from the required number (with a heavy penalty).
 def add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, num_weeks, days_per_week):
+    working_slacks = []
     if "Working Days" in required_rules:
         for e, emp in enumerate(employees):
             if emp in required_rules["Working Days"]:
@@ -132,17 +132,19 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
                         model.Add(x[w, d, e] <= shift_to_int["L"]).OnlyEnforceIf(is_working)
                         model.Add(x[w, d, e] > shift_to_int["L"]).OnlyEnforceIf(is_working.Not())
                         work_vars.append(is_working)
-                    model.Add(sum(work_vars) == required_days)
+                    slack = model.NewIntVar(0, days_per_week, f"slack_{emp}_{w}")
+                    working_slacks.append(slack)
+                    model.Add(sum(work_vars) + slack == required_days)
     if "Days won't work" in required_rules:
         for emp, day in required_rules["Days won't work"].items():
             e = employees.index(emp)
             d_idx = day_name_to_index[day]
             for w in range(num_weeks):
                 model.Add(x[w, d_idx, e] == shift_to_int["D/O"])
+    return working_slacks
 
 # --- Temporary Constraints ---
-# Enforce any temporary requirements (holidays, specific day off, or specific shift on a given day)
-# with absolute priority.
+# These constraints (holidays, specific days off, or specific shifts on a given day) are implemented as hard constraints.
 def add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, days_per_week, shift_to_int):
     global_temp = temporary_rules["Required"].get("Everyone", {})
     rota_start_str = global_temp.get("Start Date", "")
@@ -194,15 +196,15 @@ def add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, d
                                 model.Add(x[w, d, e] == shift_to_int["H"])
 
 # --- Objective Function ---
-# Reward weekend off patterns and preferred shift assignments.
-def add_objective(model, x, shift_to_int, num_weeks, days_per_week, employees, preferred_rules, alternating_employees):
+# We maximize rewards for weekend off patterns and for meeting preferred shift assignments.
+# Additionally, we penalize deviations from the "Working Days" requirements via the slack variables.
+def add_objective(model, x, shift_to_int, num_weeks, days_per_week, employees, preferred_rules, alternating_employees, working_slacks):
     objective_terms = []
     # Weekend bonus for non-alternating employees.
-    weekend_bonus_full = 10000
-    weekend_bonus_partial = 5000
+    weekend_bonus_full = 5000
+    weekend_bonus_partial = 2500
     for w in range(num_weeks):
         for e, emp in enumerate(employees):
-            # Only non-alternating employees get weekend bonus in the objective.
             if emp in alternating_employees:
                 continue
             sat_off = model.NewBoolVar(f"sat_off_{w}_{e}")
@@ -215,7 +217,6 @@ def add_objective(model, x, shift_to_int, num_weeks, days_per_week, employees, p
             model.AddBoolAnd([sat_off, sun_off]).OnlyEnforceIf(full_weekend)
             model.AddBoolOr([sat_off.Not(), sun_off.Not()]).OnlyEnforceIf(full_weekend.Not())
             partial_weekend = model.NewBoolVar(f"partial_weekend_{w}_{e}")
-            # Enforce partial if exactly one day off.
             model.Add(sat_off + sun_off == 1).OnlyEnforceIf(partial_weekend)
             model.Add(sat_off + sun_off != 1).OnlyEnforceIf(partial_weekend.Not())
             objective_terms.append(full_weekend * weekend_bonus_full)
@@ -240,15 +241,19 @@ def add_objective(model, x, shift_to_int, num_weeks, days_per_week, employees, p
                     model.Add(x[w, d, e] == shift_to_int["M"]).OnlyEnforceIf(b)
                     model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(b.Not())
                     objective_terms.append(b * pref_weight)
+    # Penalize deviations from required working days.
+    SLACK_WEIGHT = 10000
+    if working_slacks:
+        objective_terms.append(-SLACK_WEIGHT * sum(working_slacks))
     model.Maximize(sum(objective_terms))
 
-# --- Main Script Execution ---
+# --- Main Execution ---
 
 num_weeks = 4
 days_per_week = 7
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Load required and preferred rules.
+# Load rules.
 rules_filepath = os.path.join(script_dir, "Rules.json")
 required_rules, preferred_rules = load_rules(rules_filepath)
 with open(rules_filepath, "r") as f:
@@ -266,22 +271,22 @@ shifts = ["E", "M", "L", "D/O", "H"]
 shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3, "H": 4}
 int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O", 4: "H"}
 
-# Initialize the model.
+# Initialize model.
 model, x = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
 
-# Enforce allowed shifts per "Will Work" rules.
+# Enforce allowed shifts.
 add_allowed_shifts(model, required_rules, employees, shift_to_int, x, num_weeks, days_per_week)
 
-# Enforce daily coverage constraints.
+# Enforce daily coverage.
 add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, employees)
 
 # Enforce step-up priority.
 add_stepup_priority(model, x, shift_to_int, num_weeks, days_per_week, employees, stepup_employees)
 
-# Enforce employee-specific constraints from required_rules.
-add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, num_weeks, days_per_week)
+# Enforce employee-specific constraints (with working-day slack).
+working_slacks = add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, num_weeks, days_per_week)
 
-# Enforce temporary constraints (holidays, specific days off, or specific shifts).
+# Enforce temporary constraints.
 temp_filepath = os.path.join(script_dir, "Temporary Rules.json")
 temporary_rules = load_temporary_rules(temp_filepath)
 add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, days_per_week, shift_to_int)
@@ -290,8 +295,8 @@ add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, days_
 if alternating_employees:
     enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks, employees, shift_to_int, alternating_employees)
 
-# Add the objective function.
-add_objective(model, x, shift_to_int, num_weeks, days_per_week, employees, preferred_rules, alternating_employees)
+# Add the objective.
+add_objective(model, x, shift_to_int, num_weeks, days_per_week, employees, preferred_rules, alternating_employees, working_slacks)
 
 # Solve the model.
 solver = cp_model.CpSolver()
@@ -324,7 +329,7 @@ def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week
                 writer.writerow(row)
             writer.writerow([])
 
-# Get start date from temporary rules.
+# Determine start date from temporary rules.
 global_temp = temporary_rules["Required"].get("Everyone", {})
 if "Start Date" in global_temp:
     start_date = datetime.datetime.strptime(global_temp["Start Date"], "%Y/%m/%d")
