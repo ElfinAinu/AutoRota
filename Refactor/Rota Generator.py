@@ -295,6 +295,34 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     weekend_penalty_term = sum(weekend_slacks[emp] for emp in weekend_slacks)
 
     # 2. SHIFT PREFERENCES – Secondary Priority:
+    prefs = []
+    if "Late Shifts" in preferred_rules:
+        for emp in preferred_rules["Late Shifts"]:
+            e = employees.index(emp)
+            for w in range(num_weeks):
+                for d in range(days_per_week):
+                    var_late = model.NewBoolVar(f"{emp.lower()}_late_pref_{w}_{d}")
+                    model.Add(x[w, d, e] == shift_to_int["L"]).OnlyEnforceIf(var_late)
+                    model.Add(x[w, d, e] != shift_to_int["L"]).OnlyEnforceIf(var_late.Not())
+                    prefs.append(var_late)
+    if "Early Shifts" in preferred_rules:
+        for emp in preferred_rules["Early Shifts"]:
+            e = employees.index(emp)
+            for w in range(num_weeks):
+                for d in range(days_per_week):
+                    var_early = model.NewBoolVar(f"{emp.lower()}_early_pref_{w}_{d}")
+                    model.Add(x[w, d, e] == shift_to_int["E"]).OnlyEnforceIf(var_early)
+                    model.Add(x[w, d, e] != shift_to_int["E"]).OnlyEnforceIf(var_early.Not())
+                    prefs.append(var_early)
+    if "Middle Shifts" in preferred_rules:
+        for emp in preferred_rules["Middle Shifts"]:
+            e = employees.index(emp)
+            for w in range(num_weeks):
+                for d in range(days_per_week):
+                    var_middle = model.NewBoolVar(f"{emp.lower()}_middle_pref_{w}_{d}")
+                    model.Add(x[w, d, e] == shift_to_int["M"]).OnlyEnforceIf(var_middle)
+                    model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(var_middle.Not())
+                    prefs.append(var_middle)
     PREFERENCE_WEIGHT = 100000  # now lower than the weekend bonus
     preference_term = sum(prefs) # prefs built from, e.g., Jennifer's late, Stacey's middle, etc.
 
