@@ -285,7 +285,7 @@ weekend_off_indicators, weekend_slacks = add_weekend_off_constraints(model, x, n
 # 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
 ###############################################################################
 def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, stepup_employees):
-    PREFERENCE_WEIGHT = 100000
+    PREFERENCE_WEIGHT = 50000
     prefs = []
     if "Late Shifts" in preferred_rules:
         for emp in preferred_rules["Late Shifts"]:
@@ -315,13 +315,13 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(var_middle.Not())
                     prefs.append(var_middle)
     BIG_PENALTY = 1000
-    WEEKEND_BONUS = 8000  # Increase bonus further to encourage full weekend off
-    WEEKEND_PENALTY = 2000  # heavy penalty for missing a weekend off
+    WEEKEND_BONUS = 6000  # Adjusted bonus to balance preference
+    WEEKEND_PENALTY = 1500  # Adjusted penalty to balance preference
     weekend_penalty_term = sum(weekend_slacks[emp] for emp in weekend_slacks)
     obj_expr = PREFERENCE_WEIGHT * sum(prefs)
     penalties = sum(six_in_a_row[i, e] * BIG_PENALTY for e in range(len(employees)) for i in range(total_days - 5))
     # Penalize working days for step-up employees.
-    stepup_penalty_factor = 500
+    stepup_penalty_factor = 200
     weekend_coverage_bonus = []
     for w in range(num_weeks):
         for d in [0, days_per_week - 1]:
@@ -340,7 +340,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     # Accumulate bonus from weekend off indicators for each shift leader.
     weekend_bonus = sum(weekend for emp in weekend_off_indicators for weekend in weekend_off_indicators[emp])
   
-    DUPLICATE_PENALTY = 3000
+    DUPLICATE_PENALTY = 1000
     duplicate_penalty = calc_duplicate_shift_leader_penalty(model, x, shift_to_int, num_weeks, days_per_week, shift_leaders, DUPLICATE_PENALTY)
 
     final_obj = cp_model.LinearExpr.Sum([
