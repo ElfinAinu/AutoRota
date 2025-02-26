@@ -266,10 +266,11 @@ def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week
                         row.append(shift_str)
                 writer.writerow(row)
             writer.writerow([])
+if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
     json_file = os.path.join(script_dir, "Re Refactored Rules.json")
     required_rules, preferred_rules = load_rules(json_file)
-    
+
     num_weeks = 4
     days_per_week = 7
     employees = ["Jennifer", "Luke", "Senaka", "Stacey", "Callum"]
@@ -280,7 +281,7 @@ def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week
         "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3,
         "Thursday": 4, "Friday": 5, "Saturday": 6
     }
-    
+
     model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
     add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, len(employees))
     add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees)
@@ -289,10 +290,10 @@ def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week
     add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
     add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days)
-    
+
     solver = cp_model.CpSolver()
     status = solver.Solve(model)
-    
+
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         schedule = build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift)
         start_date = datetime.datetime.strptime("23/02/2025", "%d/%m/%Y")
@@ -301,8 +302,3 @@ def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week
         print("Solution found. Wrote to:", os.path.abspath(output_file))
     else:
         print("No solution found.")
-
-if __name__ == "__main__":
-    main()
-else:
-    print("No solution found.")
