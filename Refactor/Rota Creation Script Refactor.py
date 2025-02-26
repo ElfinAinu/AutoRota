@@ -149,22 +149,6 @@ if "Every other weekend off" in required_rules:
                 model.Add(x[w, 6, e] == shift_to_int["D/O"])
                 model.Add(x[w+1, 0, e] == shift_to_int["D/O"])
 
-# --- Unified "Will Work" required rules ---
-# Priority: Late > Middle > Early.
-will_work_late_set   = set(required_rules.get("Will Work Late", []))
-will_work_middle_set = set(required_rules.get("Will Work Middle", []))
-will_work_early_set  = set(required_rules.get("Will work Early", []))
-for e, emp in enumerate(employees):
-    for w in range(num_weeks):
-        for d in range(days_per_week):
-            # Only enforce if the person is working on this day.
-            if_emp_work = work[w, d, e]
-            if emp in will_work_late_set:
-                model.Add(x[w, d, e] == shift_to_int["L"]).OnlyEnforceIf(if_emp_work)
-            elif emp in will_work_middle_set:
-                model.Add(x[w, d, e] == shift_to_int["M"]).OnlyEnforceIf(if_emp_work)
-            elif emp in will_work_early_set:
-                model.Add(x[w, d, e] == shift_to_int["E"]).OnlyEnforceIf(if_emp_work)
 
 ###############################################################################
 # 5) No Late-to-Early across week boundaries:
