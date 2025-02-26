@@ -186,10 +186,20 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
     if "Every other weekend off" in required_rules:
         for emp in required_rules["Every other weekend off"]:
             e = employees.index(emp)
-            for w in range(num_weeks - 1):
-                if w % 2 == 1:
-                    model.Add(x[w, 6, e] == shift_to_int["D/O"])
-                    model.Add(x[w+1, 0, e] == shift_to_int["D/O"])
+            weekend_off_vars = []
+            # For each weekend defined by week i (Saturday) and week i+1 (Sunday)
+            for i in range(num_weeks - 1):
+                weekend_off_i = model.NewBoolVar(f"{emp}_weekend_off_{i}")
+                # Enforce that if weekend_off_i is true then both Saturday of week i and Sunday of week i+1 are off
+                model.Add(x[i, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off_i)
+                model.Add(x[i, days_per_week - 1, e] != shift_to_int["D/O"]).OnlyEnforceIf(weekend_off_i.Not())
+                model.Add(x[i+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off_i)
+                model.Add(x[i+1, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(weekend_off_i.Not())
+                weekend_off_vars.append(weekend_off_i)
+            # Enforce that exactly the required number of weekends are off.
+            # (For example, if there are 3 weekends (num_weeks - 1 = 3), require 3//2 = 1 full weekend off.)
+            required_off = (num_weeks - 1) // 2
+            model.Add(sum(weekend_off_vars) == required_off)
 
 def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week):
     for w in range(num_weeks):
