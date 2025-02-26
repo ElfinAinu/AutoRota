@@ -341,25 +341,25 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     MIDDLE_PREF_WEIGHT = 2000
     preference_term = LATE_PREF_WEIGHT * late_pref_sum + EARLY_PREF_WEIGHT * early_pref_sum + MIDDLE_PREF_WEIGHT * middle_pref_sum
 
-    # 3. CALLUM (or any step-up) DAY BONUS:
-    #    Look into the 'Days' preference from JSON so that if a step-up (e.g., Callum) likes Friday/Sunday, we reward that.
-    CALLUM_DAY_BONUS_WEIGHT = 2000
-    callup_day_bonus = 0
+    # 3. STEP-UP DAY BONUS:
+    #    Look into the 'Days' preference from JSON so that if a step-up employee prefers certain days, we reward that.
+    STEPUP_DAY_BONUS_WEIGHT = 2000
+    stepup_day_bonus = 0
     if "Days" in preferred_rules:
-        # Create an inverse mapping for day names if needed.
-        day_index_to_name = {v: k for k, v in day_name_to_index.items()}
         for emp, pref_days in preferred_rules["Days"].items():
-            e = employees.index(emp)
-            # Map preferred day names to their indices.
-            preferred_day_idxs = [day_name_to_index[day] for day in pref_days]
-            for w in range(num_weeks):
-                for d in range(days_per_week):
-                    if d in preferred_day_idxs:
-                        var_pref_day = model.NewBoolVar(f"{emp.lower()}_preferred_day_{w}_{d}")
-                        # Reward non-off assignment on that day.
-                        model.Add(x[w, d, e] != shift_to_int["D/O"]).OnlyEnforceIf(var_pref_day)
-                        model.Add(x[w, d, e] == shift_to_int["D/O"]).OnlyEnforceIf(var_pref_day.Not())
-                        callup_day_bonus += var_pref_day
+            # Only process if the employee is in the step-up list.
+            if emp in stepup_employees:
+                e = employees.index(emp)
+                # Map preferred day names to indices.
+                preferred_day_idxs = [day_name_to_index[day] for day in pref_days]
+                for w in range(num_weeks):
+                    for d in range(days_per_week):
+                        if d in preferred_day_idxs:
+                            var_pref_day = model.NewBoolVar(f"{emp.lower()}_preferred_day_{w}_{d}")
+                            # Reward that the employee is assigned a non-off shift on a preferred day.
+                            model.Add(x[w, d, e] != shift_to_int["D/O"]).OnlyEnforceIf(var_pref_day)
+                            model.Add(x[w, d, e] == shift_to_int["D/O"]).OnlyEnforceIf(var_pref_day.Not())
+                            stepup_day_bonus += var_pref_day
 
     # 4. STEP-UP PENALTY – Tertiary Priority:
     STEPUP_PENALTY_FACTOR = 10
@@ -482,7 +482,7 @@ def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week
                 row = [emp]
                 for d in range(days_per_week):
                     shift_str = schedule[w][d][emp]
-                    if emp == "Callum" and shift_str == "D/O":
+                    if emp in stepup_employees and shift_str == "D/O":
                         row.append("")
                     else:
                         row.append(shift_str)
