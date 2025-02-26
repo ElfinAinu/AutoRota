@@ -32,6 +32,7 @@ def initialize_model(num_weeks, days_per_week, employees, shift_to_int):
     num_employees = len(employees)
     x = {}
     work = {}
+    slack_work_days = []
     for w in range(num_weeks):
         for d in range(days_per_week):
             for e in range(num_employees):
@@ -121,6 +122,8 @@ def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, s
     return weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators
 
 def enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks, employees, shift_to_int, alternating_employees):
+    slack_weekend = []
+    slack_weekend_complement = []
     for emp in alternating_employees:
         e = employees.index(emp)
         # For each consecutive pair of weeks (even week and the following odd week)
@@ -129,10 +132,10 @@ def enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks,
             # Even week: Saturday must be off.
             slack_weekend = model.NewIntVar(0, 1, f"slack_weekend_{w}_{e}")
             model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(slack_weekend.Not())
-            # Odd week: Sunday must be off.
+            slack_weekend.append(slack_weekend_var)
             slack_weekend_complement = model.NewIntVar(0, 1, f"slack_weekend_complement_{w}_{e}")
             model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(slack_weekend_complement.Not())
-            # Conversely, enforce that the complementary weekend days are working:
+            slack_weekend_complement.append(slack_weekend_complement_var)
             # Even week: Sunday must be working.
             model.Add(x[w, 0, e] != shift_to_int["D/O"])
             # Odd week: Saturday must be working.
@@ -184,9 +187,10 @@ def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees
             if employees[e] in stepup_employees:
                 model.Add(sum(day_work) <= 3)   # or whichever range you decide
             else:
-                slack_work_days = model.NewIntVar(0, 1, f"slack_work_days_{w}_{e}")
-                model.Add(sum(day_work) >= 4 - slack_work_days)
-                model.Add(sum(day_work) <= 6 + slack_work_days)
+                slack_work_days_var = model.NewIntVar(0, 1, f"slack_work_days_{w}_{e}")
+                model.Add(sum(day_work) >= 4 - slack_work_days_var)
+                model.Add(sum(day_work) <= 6 + slack_work_days_var)
+                slack_work_days.append(slack_work_days_var)
 
 ###############################################################################
 # 3) Consecutive days constraints:
@@ -209,10 +213,12 @@ for w in range(num_weeks):
 
 def add_consecutive_day_constraints(model, global_work, total_days, num_employees, days_per_week):
     # Hard: no 7 in a row.
+    slack_seven_in_a_row = []
     for e in range(num_employees):
         for i in range(total_days - 6):
             slack_seven_in_a_row = model.NewIntVar(0, 1, f"slack_seven_in_a_row_{i}_{e}")
             model.Add(sum(global_work[j, e] for j in range(i, i + 7)) <= 6 + slack_seven_in_a_row)
+            slack_seven_in_a_row.append(slack_seven_in_a_row_var)
     # Soft: Track six-in-a-row occurrences.
     six_in_a_row = {}
     for e in range(num_employees):
