@@ -310,7 +310,6 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     ])
     model.Maximize(final_obj)
 
-    add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators)
 
 ###############################################################################
 # Solve and output
