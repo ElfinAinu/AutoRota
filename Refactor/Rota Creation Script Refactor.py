@@ -25,32 +25,39 @@ day_name_to_index = {
     "Saturday": 6
 }
 
+def initialize_model(num_weeks, days_per_week, employees, shift_to_int):
+    model = cp_model.CpModel()
+    num_employees = len(employees)
+    x = {}
+    work = {}
+    for w in range(num_weeks):
+        for d in range(days_per_week):
+            for e in range(num_employees):
+                x[w, d, e] = model.NewIntVar(0, 3, f"x[{w},{d},{e}]")
+                work[w, d, e] = model.NewBoolVar(f"work[{w},{d},{e}]")
+                model.Add(x[w, d, e] != shift_to_int["D/O"]).OnlyEnforceIf(work[w, d, e])
+                model.Add(x[w, d, e] == shift_to_int["D/O"]).OnlyEnforceIf(work[w, d, e].Not())
+    
+    total_days = num_weeks * days_per_week
+    global_work = {}
+    def day_index(w, d):
+        return w * days_per_week + d
+    for w in range(num_weeks):
+        for d in range(days_per_week):
+            i = day_index(w, d)
+            for e in range(num_employees):
+                global_work[i, e] = model.NewBoolVar(f"global_work[{i},{e}]")
+                model.Add(global_work[i, e] == 1).OnlyEnforceIf(work[w, d, e])
+                model.Add(global_work[i, e] == 0).OnlyEnforceIf(work[w, d, e].Not())
+    return model, x, work, global_work, total_days
+
 num_weeks = 4
 days_per_week = 7
 employees = ["Jennifer", "Luke", "Senaka", "Stacey", "Callum"]
-num_employees = len(employees)
-
-shifts = ["E", "M", "L", "D/O"]  # 0=E,1=M,2=L,3=D/O
+shifts = ["E", "M", "L", "D/O"]
 shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3}
 int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O"}
-
-model = cp_model.CpModel()
-
-# Decision variables: x[w, d, e] is the shift of employee e on week w, day d.
-x = {}
-for w in range(num_weeks):
-    for d in range(days_per_week):
-        for e in range(num_employees):
-            x[w, d, e] = model.NewIntVar(0, 3, f"x[{w},{d},{e}]")
-
-# Helper booleans: work[w,d,e] = True if shift != D/O.
-work = {}
-for w in range(num_weeks):
-    for d in range(days_per_week):
-        for e in range(num_employees):
-            work[w, d, e] = model.NewBoolVar(f"work[{w},{d},{e}]")
-            model.Add(x[w, d, e] != shift_to_int["D/O"]).OnlyEnforceIf(work[w, d, e])
-            model.Add(x[w, d, e] == shift_to_int["D/O"]).OnlyEnforceIf(work[w, d, e].Not())
+model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
 
 ###############################################################################
 # 1) Daily coverage: at least one Early and one Late each day.
