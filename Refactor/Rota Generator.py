@@ -69,23 +69,24 @@ def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, s
     for emp in shift_leaders:
         e = employees.index(emp)
         emp_indicators = []
-        for w in range(num_weeks):
+        # Loop over weeks 0 to num_weeks-2 so that we can pair Saturday and the next Sunday's off
+        for w in range(num_weeks - 1):
             weekend_off = model.NewBoolVar(f"weekend_off_{emp}_{w}")
-            # Enforce that if weekend_off is true then both Sunday and Saturday are off.
-            model.Add(x[w, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
+            # If weekend_off is true then Saturday of week w and Sunday of week w+1 must be off.
             model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
-            # If weekend_off is false, then at least one of the days is not off.
-            not_sunday_off = model.NewBoolVar(f"not_off_sunday_{emp}_{w}")
-            model.Add(x[w, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(not_sunday_off)
-            model.Add(x[w, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(not_sunday_off.Not())
-
-            not_saturday_off = model.NewBoolVar(f"not_off_saturday_{emp}_{w}")
-            model.Add(x[w, days_per_week - 1, e] != shift_to_int["D/O"]).OnlyEnforceIf(not_saturday_off)
-            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(not_saturday_off.Not())
-
-            model.AddBoolOr([not_sunday_off, not_saturday_off]).OnlyEnforceIf(weekend_off.Not())
+            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
+            # Otherwise, at least one of these days is not off.
+            not_sat_off = model.NewBoolVar(f"not_off_sat_{emp}_{w}")
+            model.Add(x[w, days_per_week - 1, e] != shift_to_int["D/O"]).OnlyEnforceIf(not_sat_off)
+            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(not_sat_off.Not())
+            
+            not_sun_off = model.NewBoolVar(f"not_off_sun_{emp}_{w}")
+            model.Add(x[w+1, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(not_sun_off)
+            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(not_sun_off.Not())
+            
+            model.AddBoolOr([not_sat_off, not_sun_off]).OnlyEnforceIf(weekend_off.Not())
             emp_indicators.append(weekend_off)
-        # Instead of enforcing a hard constraint, introduce a slack variable.
+        # Instead of a hard constraint, a slack variable allows the model to sacrifice a weekend off at heavy cost.
         slack = model.NewIntVar(0, 1, f"weekend_slack_{emp}")
         model.Add(sum(emp_indicators) + slack >= 1)
         weekend_slacks[emp] = slack
@@ -216,7 +217,13 @@ if __name__ == "__main__":
 
     num_weeks = 4
     days_per_week = 7
-    employees = ["Jennifer", "Luke", "Senaka", "Stacey", "Callum"]
+    # Load the complete JSON from Rules.json to extract employee lists.
+    with open(json_file, "r") as f:
+        full_json = json.load(f)
+    # Derive employees from the JSON lists.
+    shift_leaders = full_json.get("employees-shift_leaders", [])
+    step_up = full_json.get("employees-step_up", [])
+    employees = shift_leaders + step_up  # Order as desired.
     shifts = ["E", "M", "L", "D/O"]
     shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3}
     int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O"}
