@@ -419,6 +419,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
             model.Add(extra_late == late_count - 1)
             extra_early_penalty_term += extra_early
             extra_late_penalty_term  += extra_late
+    final_obj = cp_model.LinearExpr.Sum([
         # (a) Weekend off is top: reward (minus penalty if missing)
         weekend_reward_term,
         # (b) Next, individual shift preferences.
