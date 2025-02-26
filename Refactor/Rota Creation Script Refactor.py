@@ -340,7 +340,7 @@ if __name__ == "__main__":
     add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, work, num_weeks, days_per_week)
     add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
-    add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days)
+    add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators)
 
     solver = cp_model.CpSolver()
     status = solver.Solve(model)
