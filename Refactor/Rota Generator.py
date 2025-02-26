@@ -470,8 +470,9 @@ if __name__ == "__main__":
         best_obj = solver.ObjectiveValue()
         print("Optimal objective value:", best_obj)
         model.Add(final_obj == int(best_obj))
-        # Export the model, remove the objective so that it becomes a satisfiability problem.
-        model_proto = model.ExportModelAsProto()
+        # Export the model to a proto, then remove the objective so that it becomes a satisfiability problem.
+        model_proto = cp_model.CpModelProto()
+        model.CopyToProto(model_proto)
         model_proto.ClearField("objective")
         satisfaction_model = cp_model.CpModel.FromProto(model_proto)
 
