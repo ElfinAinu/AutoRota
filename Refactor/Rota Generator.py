@@ -297,8 +297,8 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
 
     # 1. WEEKEND OFF TERMS – Highest Priority:
     #    For each shift leader, every full weekend off yields a huge reward.
-    WEEKEND_BONUS_FULL = 500000    # reward per full weekend off achieved
-    WEEKEND_BONUS_PARTIAL = 250000  # reward per singular weekend day off achieved
+    WEEKEND_BONUS_FULL = 50000    # reduced reward per full weekend off achieved
+    WEEKEND_BONUS_PARTIAL = 25000  # reduced reward per singular weekend day off achieved
     weekend_full_reward = sum(ind for emp in weekend_full_indicators for ind in weekend_full_indicators[emp])
     weekend_partial_reward = sum(ind for emp in weekend_sat_only_indicators for ind in weekend_sat_only_indicators[emp]) + \
                              sum(ind for emp in weekend_sun_only_indicators for ind in weekend_sun_only_indicators[emp])
@@ -335,14 +335,14 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     model.Add(x[w, d, e] == shift_to_int["M"]).OnlyEnforceIf(var_middle)
                     model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(var_middle.Not())
                     middle_pref_sum += var_middle
-    LATE_PREF_WEIGHT = 150000
-    EARLY_PREF_WEIGHT = 120000
-    MIDDLE_PREF_WEIGHT = 150000
+    LATE_PREF_WEIGHT = 15000
+    EARLY_PREF_WEIGHT = 12000
+    MIDDLE_PREF_WEIGHT = 15000
     preference_term = LATE_PREF_WEIGHT * late_pref_sum + EARLY_PREF_WEIGHT * early_pref_sum + MIDDLE_PREF_WEIGHT * middle_pref_sum
 
     # 3. CALLUM (or any step-up) DAY BONUS:
     #    Look into the 'Days' preference from JSON so that if a step-up (e.g., Callum) likes Friday/Sunday, we reward that.
-    CALLUM_DAY_BONUS_WEIGHT = 100000
+    CALLUM_DAY_BONUS_WEIGHT = 10000
     callup_day_bonus = 0
     if "Days" in preferred_rules:
         # Create an inverse mapping for day names if needed.
@@ -361,7 +361,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                         callup_day_bonus += var_pref_day
 
     # 4. STEP-UP PENALTY – Tertiary Priority:
-    STEPUP_PENALTY_FACTOR = 600
+    STEPUP_PENALTY_FACTOR = 60
     stepup_penalty = 0
     for emp in stepup_employees:
         e = employees.index(emp)
@@ -370,7 +370,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                 stepup_penalty += work[w, d, e]
 
     # 5. OFF-DAY GROUPING PENALTY
-    OFF_DAY_GROUPING_PENALTY = 2000
+    OFF_DAY_GROUPING_PENALTY = 200
     off_day_penalty_terms = []
     for e in range(len(employees)):
         if employees[e] in shift_leaders:
@@ -388,8 +388,8 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
 
     # 6. OTHER PENALTIES (six in a row & duplicate shift leader assignments)
     off_day_penalty_expr = cp_model.LinearExpr.Sum(off_day_penalty_terms)
-    SIX_IN_A_ROW_PENALTY = 1000
-    EXTRA_SHIFT_LEADER_PENALTY = 500  # Additional penalty for any shift leader
+    SIX_IN_A_ROW_PENALTY = 100
+    EXTRA_SHIFT_LEADER_PENALTY = 50  # Additional penalty for any shift leader
     six_penalties = 0
     for e in range(len(employees)):
         for i in range(total_days - 5):
@@ -397,13 +397,13 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                 six_penalties += six_in_a_row[i, e] * (SIX_IN_A_ROW_PENALTY + EXTRA_SHIFT_LEADER_PENALTY)
             else:
                 six_penalties += six_in_a_row[i, e] * SIX_IN_A_ROW_PENALTY
-    DUPLICATE_PENALTY = 1000
+    DUPLICATE_PENALTY = 100
     duplicate_penalty = calc_duplicate_shift_leader_penalty(model, x, shift_to_int, num_weeks, days_per_week, shift_leaders, DUPLICATE_PENALTY)
 
     # 6. Final Objective Assembly – use a weighted sum that imposes our strict hierarchy:
     # --- (NEW) Daily Early/Late Preference Soft Penalization ---
-    EARLY_EXCESS_PENALTY = 20000
-    LATE_EXCESS_PENALTY = 20000
+    EARLY_EXCESS_PENALTY = 2000
+    LATE_EXCESS_PENALTY = 2000
     extra_early_penalty_term = 0
     extra_late_penalty_term = 0
     for w in range(num_weeks):
