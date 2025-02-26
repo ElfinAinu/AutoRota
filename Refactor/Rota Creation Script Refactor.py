@@ -12,7 +12,7 @@ def load_rules(json_filepath):
     return required_rules, preferred_rules
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-json_file = os.path.join(script_dir, "Re Refactored Rules.json")
+json_file = os.path.join(script_dir, "Rules.json")
 required_rules, preferred_rules = load_rules(json_file)
 
 day_name_to_index = {
@@ -325,7 +325,7 @@ def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week
             writer.writerow([])
 if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    json_file = os.path.join(script_dir, "Re Refactored Rules.json")
+    json_file = os.path.join(script_dir, "Rules.json")
     required_rules, preferred_rules = load_rules(json_file)
 
     num_weeks = 4
