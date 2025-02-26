@@ -180,9 +180,10 @@ def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees
             # If the employee is a step-up, restrict them to at most 2 workdays;
             # otherwise, they must work exactly 5 days per week.
             if employees[e] in stepup_employees:
-                model.Add(sum(day_work) <= 2)
+                model.Add(sum(day_work) <= 3)   # or whichever range you decide
             else:
-                model.Add(sum(day_work) == 5)
+                model.Add(sum(day_work) >= 4)
+                model.Add(sum(day_work) <= 6)
 
 ###############################################################################
 # 3) Consecutive days constraints:
@@ -228,7 +229,7 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
             if emp in required_rules["Working Days"]:
                 required_days = required_rules["Working Days"][emp]
                 for w in range(num_weeks):
-                    if emp == "Callum":
+                    if emp in stepup_employees:
                         model.Add(sum(work[w, d, e] for d in range(days_per_week)) <= required_days)
                     else:
                         model.Add(sum(work[w, d, e] for d in range(days_per_week)) == required_days)
