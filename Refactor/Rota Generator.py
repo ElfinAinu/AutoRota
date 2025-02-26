@@ -1,6 +1,7 @@
 from ortools.sat.python import cp_model
 import datetime
 from ortools.sat import cp_model_pb2
+import random
 import csv
 import os
 import json
