@@ -63,19 +63,25 @@ model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_w
 # Add Weekend-off Constraint for Shift Leaders
 ###############################################################################
 def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders):
-    # For each shift leader, require at least one weekend off,
-    # defined as Saturday in week w and Sunday in week w+1 both being off.
+    weekend_off_indicators = {}
     for emp in shift_leaders:
         e = employees.index(emp)
-        weekend_off_indicators = []
-        for w in range(num_weeks - 1):
+        emp_indicators = []
+        for w in range(num_weeks):
             weekend_off = model.NewBoolVar(f"weekend_off_{emp}_{w}")
-            # Link the indicator with Saturday off in week w and Sunday off in week w+1.
+            # Enforce that if weekend_off is true then both Sunday and Saturday are off.
+            model.Add(x[w, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
             model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
-            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
-            weekend_off_indicators.append(weekend_off)
-        # Enforce that at least one weekend boundary is taken off.
-        model.Add(sum(weekend_off_indicators) >= 1)
+            # If weekend_off is false, then at least one of the days is not off.
+            model.AddBoolOr([
+                x[w, 0, e] != shift_to_int["D/O"],
+                x[w, days_per_week - 1, e] != shift_to_int["D/O"]
+            ]).OnlyEnforceIf(weekend_off.Not())
+            emp_indicators.append(weekend_off)
+        # Enforce the hard constraint that each shift leader must have at least one weekend off.
+        model.Add(sum(emp_indicators) >= 1)
+        weekend_off_indicators[emp] = emp_indicators
+    return weekend_off_indicators
 # 1) Daily coverage: at least one Early and one Late each day.
 ###############################################################################
 def add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, num_employees):
