@@ -52,6 +52,27 @@ def initialize_model(num_weeks, days_per_week, employees, shift_to_int):
                 model.Add(global_work[i, e] == 0).OnlyEnforceIf(work[w, d, e].Not())
     return model, x, work, global_work, total_days
 
+def calc_duplicate_shift_leader_penalty(model, x, shift_to_int, num_weeks, days_per_week, shift_leaders, duplicate_penalty_factor):
+    duplicate_penalty_expr = 0
+    for w in range(num_weeks):
+        for d in range(days_per_week):
+            for shift in ["E", "M", "L"]:
+                # For each day and shift, compute the number of shift leaders assigned that shift.
+                indicators = []
+                for i in range(len(shift_leaders)):  # assume shift leaders are at the start of employees list
+                    ind = model.NewBoolVar(f"dup_indicator_{shift}_w{w}_d{d}_{i}")
+                    model.Add(x[w, d, i] == shift_to_int[shift]).OnlyEnforceIf(ind)
+                    model.Add(x[w, d, i] != shift_to_int[shift]).OnlyEnforceIf(ind.Not())
+                    indicators.append(ind)
+                # Let count_expr = sum(indicators)
+                # Create an auxiliary variable to represent the extra assignments above 1.
+                dup_aux = model.NewIntVar(0, len(shift_leaders) - 1, f"dup_aux_{shift}_w{w}_d{d}")
+                # Enforce: dup_aux = max(0, (sum(indicators) - 1))
+                model.Add(dup_aux + 1 >= sum(indicators))
+                model.Add(dup_aux >= sum(indicators) - 1)
+                duplicate_penalty_expr += duplicate_penalty_factor * dup_aux
+    return duplicate_penalty_expr
+
 num_weeks = 4
 days_per_week = 7
 employees = ["Jennifer", "Luke", "Senaka", "Stacey", "Callum"]
@@ -264,7 +285,7 @@ weekend_off_indicators, weekend_slacks = add_weekend_off_constraints(model, x, n
 # 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
 ###############################################################################
 def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, stepup_employees):
-    PREFERENCE_WEIGHT = 5000
+    PREFERENCE_WEIGHT = 20000
     prefs = []
     if "Late Shifts" in preferred_rules:
         for emp in preferred_rules["Late Shifts"]:
@@ -300,7 +321,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     obj_expr = PREFERENCE_WEIGHT * sum(prefs)
     penalties = sum(six_in_a_row[i, e] * BIG_PENALTY for e in range(len(employees)) for i in range(total_days - 5))
     # Penalize working days for step-up employees.
-    stepup_penalty_factor = 150  # slightly lower to permit more usage
+    stepup_penalty_factor = 1000
     weekend_coverage_bonus = []
     for w in range(num_weeks):
         for d in [0, days_per_week - 1]:
@@ -309,7 +330,6 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
             model.Add(x[w, d, e] != shift_to_int["D/O"]).OnlyEnforceIf(is_weekend_coverage)
             model.Add(x[w, d, e] == shift_to_int["D/O"]).OnlyEnforceIf(is_weekend_coverage.Not())
             weekend_coverage_bonus.append(is_weekend_coverage)
-    weekend_callum_bonus = 3000 * sum(weekend_coverage_bonus)
     stepup_penalty = 0
     for emp in stepup_employees:
         e = employees.index(emp)
@@ -320,13 +340,16 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
     # Accumulate bonus from weekend off indicators for each shift leader.
     weekend_bonus = sum(weekend for emp in weekend_off_indicators for weekend in weekend_off_indicators[emp])
   
+    DUPLICATE_PENALTY = 5000
+    duplicate_penalty = calc_duplicate_shift_leader_penalty(model, x, shift_to_int, num_weeks, days_per_week, shift_leaders, DUPLICATE_PENALTY)
+
     final_obj = cp_model.LinearExpr.Sum([
         obj_expr,
         -penalties,
         -stepup_penalty_factor * stepup_penalty,
         WEEKEND_BONUS * weekend_bonus,
         -WEEKEND_PENALTY * weekend_penalty_term,
-        weekend_callum_bonus
+        - duplicate_penalty
     ])
     model.Maximize(final_obj)
 
