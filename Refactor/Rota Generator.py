@@ -285,7 +285,7 @@ weekend_off_indicators, weekend_slacks = add_weekend_off_constraints(model, x, n
 ###############################################################################
 # 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
 ###############################################################################
-def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, stepup_employees):
+def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, stepup_employees, shift_leaders):
     # --- Revised Objective Terms with a Hierarchy ---
 
     # 1. WEEKEND OFF TERMS – Highest Priority:
@@ -352,7 +352,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                         callup_day_bonus += var_pref_day
 
     # 4. STEP-UP PENALTY – Tertiary Priority:
-    STEPUP_PENALTY_FACTOR = 200
+    STEPUP_PENALTY_FACTOR = 600
     stepup_penalty = 0
     for emp in stepup_employees:
         e = employees.index(emp)
@@ -362,7 +362,14 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
 
     # 5. OTHER PENALTIES (six in a row & duplicate shift leader assignments)
     SIX_IN_A_ROW_PENALTY = 1000
-    six_penalties = sum(six_in_a_row[i, e] * SIX_IN_A_ROW_PENALTY for e in range(len(employees)) for i in range(total_days - 5))
+    EXTRA_SHIFT_LEADER_PENALTY = 500  # Additional penalty for any shift leader
+    six_penalties = 0
+    for e in range(len(employees)):
+        for i in range(total_days - 5):
+            if employees[e] in shift_leaders:
+                six_penalties += six_in_a_row[i, e] * (SIX_IN_A_ROW_PENALTY + EXTRA_SHIFT_LEADER_PENALTY)
+            else:
+                six_penalties += six_in_a_row[i, e] * SIX_IN_A_ROW_PENALTY
     DUPLICATE_PENALTY = 1000
     duplicate_penalty = calc_duplicate_shift_leader_penalty(model, x, shift_to_int, num_weeks, days_per_week, shift_leaders, DUPLICATE_PENALTY)
 
@@ -456,7 +463,7 @@ if __name__ == "__main__":
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
     add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
     add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int)
-    final_obj = add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, stepup_employees)
+    final_obj = add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, stepup_employees, shift_leaders)
 
     solver = cp_model.CpSolver()
     solver.parameters.random_seed = int(datetime.datetime.now().timestamp() * 1000) % 2147483647
