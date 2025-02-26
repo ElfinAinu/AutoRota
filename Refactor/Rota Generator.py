@@ -232,7 +232,7 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
             e = employees.index(emp)
             day_idx = day_name_to_index[day]
             for w in range(num_weeks):
-                model.Add(x[w, day_idx, e] == shift_to_int["D/O"]).OnlyEnforceIf(work[w, day_idx, e].Not())
+                model.Add(x[w, day_idx, e] == shift_to_int["D/O"])
 
 def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week):
     for w in range(num_weeks):
