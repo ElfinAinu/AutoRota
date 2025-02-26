@@ -237,35 +237,6 @@ add_preferred_constraints_and_objective(model, preferred_rules, employees, shift
 solver = cp_model.CpSolver()
 status = solver.Solve(model)
 
-if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-def build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift):
-    schedule = {}
-    for w in range(num_weeks):
-        schedule[w] = {}
-        for d in range(days_per_week):
-            schedule[w][d] = {}
-            for e, emp in enumerate(employees):
-                val = solver.Value(x[w, d, e])
-                schedule[w][d][emp] = int_to_shift[val]
-    return schedule
-
-def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees):
-    with open(output_file, mode="w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        for w in range(num_weeks):
-            week_start = start_date + datetime.timedelta(days=w * days_per_week)
-            header = ["Name"] + [f"{(week_start + datetime.timedelta(days=d)).strftime('%a')} - {(week_start + datetime.timedelta(days=d)).strftime('%d/%m')}" for d in range(days_per_week)]
-            writer.writerow(header)
-            for e, emp in enumerate(employees):
-                row = [emp]
-                for d in range(days_per_week):
-                    shift_str = schedule[w][d][emp]
-                    if emp == "Callum" and shift_str == "D/O":
-                        row.append("")
-                    else:
-                        row.append(shift_str)
-                writer.writerow(row)
-            writer.writerow([])
 
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
