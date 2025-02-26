@@ -177,8 +177,8 @@ def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees
     for w in range(num_weeks):
         for e in range(len(employees)):
             day_work = [work[w, d, e] for d in range(days_per_week)]
-            # If the employee is a step-up, restrict them to at most 2 workdays;
-            # otherwise, they must work exactly 5 days per week.
+            # If the employee is a step-up, restrict them to at most 3 workdays;
+            # otherwise, they must work between 4 and 6 days per week.
             if employees[e] in stepup_employees:
                 model.Add(sum(day_work) <= 3)   # or whichever range you decide
             else:
