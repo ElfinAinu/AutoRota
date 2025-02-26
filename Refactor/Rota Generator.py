@@ -232,7 +232,11 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
             e = employees.index(emp)
             day_idx = day_name_to_index[day]
             for w in range(num_weeks):
-                model.Add(x[w, day_idx, e] == shift_to_int["D/O"])
+                # Create a Boolean indicating compliance on this day.
+                compliance = model.NewBoolVar(f"compliance_{emp}_{w}_{day}")
+                model.Add(x[w, day_idx, e] == shift_to_int["D/O"]).OnlyEnforceIf(compliance)
+                model.Add(x[w, day_idx, e] != shift_to_int["D/O"]).OnlyEnforceIf(compliance.Not())
+                days_wont_work_vars.append(compliance)
 
 def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week):
     for w in range(num_weeks):
@@ -424,8 +428,12 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
             model.Add(extra_late == late_count - 1)
             extra_early_penalty_term += extra_early
             extra_late_penalty_term  += extra_late
-    SLACK_PENALTY_WEIGHT = 10000
+    # Soft penalty for non-compliance with 'Days won't work' rules.
+    # (For each instance, if compliance is 0 (i.e. violation) then (1 - compliance) evaluates to 1.)
+    DAYS_WONT_WORK_PENALTY = 10000
+    days_wont_work_penalty_expr = cp_model.LinearExpr.Sum([1 - var for var in days_wont_work_vars])
     final_obj = cp_model.LinearExpr.Sum([
+        - DAYS_WONT_WORK_PENALTY * days_wont_work_penalty_expr,
         - SLACK_PENALTY_WEIGHT * (sum(slack_weekend) + sum(slack_weekend_complement) + sum(slack_work_days) + sum(slack_seven_in_a_row)),
         # (a) Weekend off is top: reward (minus penalty if missing)
         weekend_reward_term,
@@ -515,6 +523,7 @@ if __name__ == "__main__":
     slack_weekend_complement = []
     slack_work_days = []
     slack_seven_in_a_row = []
+    days_wont_work_vars = []
     add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, len(employees))
     add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees, stepup_employees)
     six_in_a_row = add_consecutive_day_constraints(model, global_work, total_days, len(employees), days_per_week)
