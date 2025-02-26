@@ -2,6 +2,22 @@ from ortools.sat.python import cp_model
 import datetime
 import csv
 import os
+import json
+
+with open("Re Refactored Rules.json", "r") as f:
+    refactored_rules = json.load(f)
+required_rules = refactored_rules["Rules"]["required"]
+preferred_rules = refactored_rules["Rules"].get("preferred", {})
+
+day_name_to_index = {
+    "Sunday": 0,
+    "Monday": 1,
+    "Tuesday": 2,
+    "Wednesday": 3,
+    "Thursday": 4,
+    "Friday": 5,
+    "Saturday": 6
+}
 
 num_weeks = 4
 days_per_week = 7
@@ -174,26 +190,36 @@ for e in range(num_employees):
         model.Add(x[w+1, 0, e] != shift_to_int["E"]).OnlyEnforceIf(was_late)
 
 ###############################################################################
-# 6) Soft constraints: Jennifer prefers Late, Stacey prefers Middle
-#    plus a penalty for 6_in_a_row. We'll do:
-#      objective = sum_of_prefs - BIG_PENALTY * sum(six_in_a_row)
+# 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
 ###############################################################################
 prefs = []
-for w in range(num_weeks):
-    for d in range(days_per_week):
-        for e, emp in enumerate(employees):
-            if emp == "Jennifer":
-                # +1 if Late
-                is_jennifer_late = model.NewBoolVar(f"jen_late_{w}_{d}")
-                model.Add(x[w, d, e] == shift_to_int["L"]).OnlyEnforceIf(is_jennifer_late)
-                model.Add(x[w, d, e] != shift_to_int["L"]).OnlyEnforceIf(is_jennifer_late.Not())
-                prefs.append(is_jennifer_late)
-            elif emp == "Stacey":
-                # +1 if Middle
-                is_stacey_middle = model.NewBoolVar(f"stacey_middle_{w}_{d}")
-                model.Add(x[w, d, e] == shift_to_int["M"]).OnlyEnforceIf(is_stacey_middle)
-                model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(is_stacey_middle.Not())
-                prefs.append(is_stacey_middle)
+if "Late Shifts" in preferred_rules:
+    for emp in preferred_rules["Late Shifts"]:
+        e = employees.index(emp)
+        for w in range(num_weeks):
+            for d in range(days_per_week):
+                var_late = model.NewBoolVar(f"{emp.lower()}_late_pref_{w}_{d}")
+                model.Add(x[w, d, e] == shift_to_int["L"]).OnlyEnforceIf(var_late)
+                model.Add(x[w, d, e] != shift_to_int["L"]).OnlyEnforceIf(var_late.Not())
+                prefs.append(var_late)
+if "Early Shifts" in preferred_rules:
+    for emp in preferred_rules["Early Shifts"]:
+        e = employees.index(emp)
+        for w in range(num_weeks):
+            for d in range(days_per_week):
+                var_early = model.NewBoolVar(f"{emp.lower()}_early_pref_{w}_{d}")
+                model.Add(x[w, d, e] == shift_to_int["E"]).OnlyEnforceIf(var_early)
+                model.Add(x[w, d, e] != shift_to_int["E"]).OnlyEnforceIf(var_early.Not())
+                prefs.append(var_early)
+if "Middle Shifts" in preferred_rules:
+    for emp in preferred_rules["Middle Shifts"]:
+        e = employees.index(emp)
+        for w in range(num_weeks):
+            for d in range(days_per_week):
+                var_middle = model.NewBoolVar(f"{emp.lower()}_middle_pref_{w}_{d}")
+                model.Add(x[w, d, e] == shift_to_int["M"]).OnlyEnforceIf(var_middle)
+                model.Add(x[w, d, e] != shift_to_int["M"]).OnlyEnforceIf(var_middle.Not())
+                prefs.append(var_middle)
 
 # Big penalty for any instance of 6_in_a_row
 BIG_PENALTY = 1000
