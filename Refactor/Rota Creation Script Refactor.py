@@ -73,10 +73,15 @@ def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, s
             model.Add(x[w, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
             model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(weekend_off)
             # If weekend_off is false, then at least one of the days is not off.
-            model.AddBoolOr([
-                x[w, 0, e] != shift_to_int["D/O"],
-                x[w, days_per_week - 1, e] != shift_to_int["D/O"]
-            ]).OnlyEnforceIf(weekend_off.Not())
+            not_sunday_off = model.NewBoolVar(f"not_off_sunday_{emp}_{w}")
+            model.Add(x[w, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(not_sunday_off)
+            model.Add(x[w, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(not_sunday_off.Not())
+
+            not_saturday_off = model.NewBoolVar(f"not_off_saturday_{emp}_{w}")
+            model.Add(x[w, days_per_week - 1, e] != shift_to_int["D/O"]).OnlyEnforceIf(not_saturday_off)
+            model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"]).OnlyEnforceIf(not_saturday_off.Not())
+
+            model.AddBoolOr([not_sunday_off, not_saturday_off]).OnlyEnforceIf(weekend_off.Not())
             emp_indicators.append(weekend_off)
         # Enforce the hard constraint that each shift leader must have at least one weekend off.
         model.Add(sum(emp_indicators) >= 1)
