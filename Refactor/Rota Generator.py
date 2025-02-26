@@ -404,7 +404,13 @@ if __name__ == "__main__":
 
     num_weeks = 4
     days_per_week = 7
-    employees = ["Jennifer", "Luke", "Senaka", "Stacey", "Callum"]
+    # Load from JSON: assume the loaded JSON is stored in full_json
+    with open(json_file, "r") as f:
+        full_json = json.load(f)
+    shift_leaders = full_json.get("employees-shift_leaders", [])
+    stepup_employees = full_json.get("employees-step_up", [])
+    # To keep the employees order as desired:
+    employees = shift_leaders + stepup_employees
     shifts = ["E", "M", "L", "D/O"]
     shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3}
     int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O"}
