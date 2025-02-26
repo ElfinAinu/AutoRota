@@ -153,6 +153,24 @@ if "Every other weekend off" in required_rules:
 
 
 ###############################################################################
+# 4.5) Enforce Allowed Shifts Based on "Will Work" Rules (Hard Constraint)
+###############################################################################
+for w in range(num_weeks):
+    for d in range(days_per_week):
+        for e, emp in enumerate(employees):
+            allowed_set = set()
+            if emp in required_rules.get("Will Work Late", []):
+                allowed_set.add(shift_to_int["L"])
+            if emp in required_rules.get("Will Work Middle", []):
+                allowed_set.add(shift_to_int["M"])
+            if emp in required_rules.get("Will work Early", []):
+                allowed_set.add(shift_to_int["E"])
+            if allowed_set:
+                for shift in ["E", "M", "L"]:
+                    if shift_to_int[shift] not in allowed_set:
+                        model.Add(x[w, d, e] != shift_to_int[shift]).OnlyEnforceIf(work[w, d, e])
+                        
+###############################################################################
 # 5) No Late-to-Early across week boundaries:
 #    If an employee works Late on Saturday, they cannot do Early on Sunday of next week.
 ###############################################################################
