@@ -296,6 +296,7 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
 
     # 1. WEEKEND OFF TERMS – Highest Priority:
     #    For each shift leader, every full weekend off yields a huge reward.
+    SLACK_PENALTY_WEIGHT = 10000
     WEEKEND_BONUS_FULL = 10000    # lower reward per full weekend off
     WEEKEND_BONUS_PARTIAL = 5000   # lower reward per singular weekend day off
     weekend_full_reward = sum(ind for emp in weekend_full_indicators for ind in weekend_full_indicators[emp])
