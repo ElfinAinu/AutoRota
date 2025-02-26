@@ -37,7 +37,7 @@ def initialize_model(num_weeks, days_per_week, employees, shift_to_int):
     for w in range(num_weeks):
         for d in range(days_per_week):
             for e in range(num_employees):
-                x[w, d, e] = model.NewIntVar(0, 3, f"x[{w},{d},{e}]")
+                x[w, d, e] = model.NewIntVar(0, 4, f"x[{w},{d},{e}]")
                 work[w, d, e] = model.NewBoolVar(f"work[{w},{d},{e}]")
                 model.Add(x[w, d, e] != shift_to_int["D/O"]).OnlyEnforceIf(work[w, d, e])
                 model.Add(x[w, d, e] == shift_to_int["D/O"]).OnlyEnforceIf(work[w, d, e].Not())
@@ -79,9 +79,9 @@ def calc_duplicate_shift_leader_penalty(model, x, shift_to_int, num_weeks, days_
 num_weeks = 4
 days_per_week = 7
 employees = ["Jennifer", "Luke", "Senaka", "Stacey", "Callum"]
-shifts = ["E", "M", "L", "D/O"]
-shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3}
-int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O"}
+shifts = ["E", "M", "L", "D/O", "H"]
+shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3, "H": 4}
+int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O", 4: "H"}
 model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
 
 ###############################################################################
@@ -494,7 +494,65 @@ def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week
                         row.append(shift_str)
                 writer.writerow(row)
             writer.writerow([])
-if __name__ == "__main__":
+def add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, days_per_week, shift_to_int):
+    # Extract the global start date from Temporary Rules (under "Everyone")
+    global_rules = temporary_rules["Required"].get("Everyone", {})
+    rota_start_str = global_rules.get("Start Date", "")
+    if rota_start_str:
+        rota_start = datetime.datetime.strptime(rota_start_str, "%Y/%m/%d")
+    else:
+        # Fallback if not provided:
+        rota_start = datetime.datetime.today()
+
+    # For each employee in the temporary rules (if defined)
+    for emp in employees:
+        if emp in temporary_rules["Required"]:
+            emp_rules = temporary_rules["Required"][emp]
+            e = employees.index(emp)
+            # 2.a) Specific Days Off:
+            # Expect "days off" to be a list of date strings in 'yyyy/mm/dd' format.
+            days_off = emp_rules.get("days off", [])
+            for day_str in days_off:
+                if day_str:  # ignore empty strings
+                    off_date = datetime.datetime.strptime(day_str, "%Y/%m/%d")
+                    # Iterate over all rota days
+                    for w in range(num_weeks):
+                        for d in range(days_per_week):
+                            current_date = rota_start + datetime.timedelta(days=w*days_per_week + d)
+                            if current_date.date() == off_date.date():
+                                # Force off-day (using "D/O") on that day.
+                                model.Add(x[w, d, e] == shift_to_int["D/O"])
+            # 2.b) Specific Shift Requirements:
+            # Check if there is a specific shift (Early, Middle, or Late) requested on a given date.
+            for shift_field in ["Early", "Middle", "Late"]:
+                req_date_str = emp_rules.get(shift_field, "")
+                if req_date_str:
+                    req_date = datetime.datetime.strptime(req_date_str, "%Y/%m/%d")
+                    for w in range(num_weeks):
+                        for d in range(days_per_week):
+                            current_date = rota_start + datetime.timedelta(days=w*days_per_week + d)
+                            if current_date.date() == req_date.date():
+                                # Force the required shift based on the field.
+                                if shift_field == "Early":
+                                    model.Add(x[w, d, e] == shift_to_int["E"])
+                                elif shift_field == "Middle":
+                                    model.Add(x[w, d, e] == shift_to_int["M"])
+                                elif shift_field == "Late":
+                                    model.Add(x[w, d, e] == shift_to_int["L"])
+            # 2.c) Holiday Enforcement:
+            # If the employee is on holiday, mark each day in the holiday range as "H".
+            holiday = emp_rules.get("holiday", {})
+            if holiday.get("active", False):
+                start_hol = holiday.get("start", "")
+                end_hol = holiday.get("end", "")
+                if start_hol and end_hol:
+                    hol_start_date = datetime.datetime.strptime(start_hol, "%Y/%m/%d")
+                    hol_end_date = datetime.datetime.strptime(end_hol, "%Y/%m/%d")
+                    for w in range(num_weeks):
+                        for d in range(days_per_week):
+                            current_date = rota_start + datetime.timedelta(days=w*days_per_week + d)
+                            if hol_start_date.date() <= current_date.date() <= hol_end_date.date():
+                                model.Add(x[w, d, e] == shift_to_int["H"])
     script_dir = os.path.dirname(os.path.abspath(__file__))
     json_file = os.path.join(script_dir, "Rules.json")
     required_rules, preferred_rules = load_rules(json_file)
@@ -534,6 +592,7 @@ if __name__ == "__main__":
     weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators = add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders)
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
     add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
+    add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, days_per_week, shift_to_int)
 
     for emp in shift_leaders:
         if emp not in required_rules.get("Every other weekend off", []):
@@ -570,7 +629,11 @@ if __name__ == "__main__":
 
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         schedule = build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift)
-        start_date = datetime.datetime.strptime("23/02/2025", "%d/%m/%Y")
+        global_temp = temporary_rules["Required"].get("Everyone", {})
+        if "Start Date" in global_temp:
+            start_date = datetime.datetime.strptime(global_temp["Start Date"], "%Y/%m/%d")
+        else:
+            start_date = datetime.datetime.strptime("23/02/2025", "%d/%m/%Y")  # fallback
         output_file = os.path.join(script_dir, "output", "rota.csv")
         write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees)
         print("Solution found. Wrote to:", os.path.abspath(output_file))
