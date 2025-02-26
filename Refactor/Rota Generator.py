@@ -470,15 +470,21 @@ if __name__ == "__main__":
         best_obj = solver.ObjectiveValue()
         print("Optimal objective value:", best_obj)
         model.Add(final_obj == int(best_obj))
+        # Export the model, remove the objective so that it becomes a satisfiability problem.
+        model_proto = model.ExportModelAsProto()
+        model_proto.ClearField("objective")
+        satisfaction_model = cp_model.CpModel.FromProto(model_proto)
+
         class OptimalSolutionCounter(cp_model.CpSolverSolutionCallback):
             def __init__(self):
                 cp_model.CpSolverSolutionCallback.__init__(self)
                 self.solution_count = 0
             def OnSolutionCallback(self):
                 self.solution_count += 1
+
         counter = OptimalSolutionCounter()
         new_solver = cp_model.CpSolver()
-        new_solver.SearchForAllSolutions(model, counter)
+        new_solver.SearchForAllSolutions(satisfaction_model, counter)
         print("Number of viable options:", counter.solution_count)
     else:
         print("No solution found.")
