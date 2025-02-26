@@ -121,61 +121,57 @@ for e in range(num_employees):
         model.AddBoolOr([global_work[k, e].Not() for k in range(i, i + 6)]).OnlyEnforceIf(six_in_a_row[i, e].Not())
 
 ###############################################################################
-# 4) Employee-specific required rules
+# 4) Employee-specific required rules from JSON
 ###############################################################################
+if "Working Days" in required_rules:
+    for e, emp in enumerate(employees):
+        if emp in required_rules["Working Days"]:
+            required_days = required_rules["Working Days"][emp]
+            if emp == "Callum":
+                for w in range(num_weeks):
+                    model.Add(sum(work[w, d, e] for d in range(days_per_week)) <= required_days)
+            else:
+                for w in range(num_weeks):
+                    model.Add(sum(work[w, d, e] for d in range(days_per_week)) == required_days)
 
-# Jennifer & Stacey: at least one weekend off (Sat of week w, Sun of week w+1).
-for e, emp in enumerate(employees):
-    if emp in ["Jennifer", "Stacey"]:
-        weekend_pairs = []
+if "Days won't work" in required_rules:
+    for emp, day in required_rules["Days won't work"].items():
+        e = employees.index(emp)
+        day_idx = day_name_to_index[day]
+        for w in range(num_weeks):
+            model.Add(x[w, day_idx, e] == shift_to_int["D/O"])
+
+if "Every other weekend off" in required_rules:
+    for emp in required_rules["Every other weekend off"]:
+        e = employees.index(emp)
         for w in range(num_weeks - 1):
-            sat_off = model.NewBoolVar(f"sat_off_{w}_{e}")
-            sun_off = model.NewBoolVar(f"sun_off_{w+1}_{e}")
-            model.Add(x[w, 6, e] == shift_to_int["D/O"]).OnlyEnforceIf(sat_off)
-            model.Add(x[w, 6, e] != shift_to_int["D/O"]).OnlyEnforceIf(sat_off.Not())
-            model.Add(x[w+1, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(sun_off)
-            model.Add(x[w+1, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(sun_off.Not())
-            pair_off = model.NewBoolVar(f"pair_off_{w}_{e}")
-            model.AddBoolAnd([sat_off, sun_off]).OnlyEnforceIf(pair_off)
-            model.AddBoolOr([sat_off.Not(), sun_off.Not()]).OnlyEnforceIf(pair_off.Not())
-            weekend_pairs.append(pair_off)
-        model.Add(sum(weekend_pairs) >= 1)
+            if w % 2 == 1:
+                model.Add(x[w, 6, e] == shift_to_int["D/O"])
+                model.Add(x[w+1, 0, e] == shift_to_int["D/O"])
 
-# Luke: Must work Early if working; every other weekend off on odd w => sat & next sun = off
-luke_idx = employees.index("Luke")
-for w in range(num_weeks):
-    for d in range(days_per_week):
-        is_luke_work = model.NewBoolVar(f"luke_work_{w}_{d}")
-        model.Add(x[w, d, luke_idx] != shift_to_int["D/O"]).OnlyEnforceIf(is_luke_work)
-        model.Add(x[w, d, luke_idx] == shift_to_int["D/O"]).OnlyEnforceIf(is_luke_work.Not())
-        model.Add(x[w, d, luke_idx] == shift_to_int["E"]).OnlyEnforceIf(is_luke_work)
+if "Will Work Late" in required_rules:
+    for emp in required_rules["Will Work Late"]:
+        e = employees.index(emp)
+        for w in range(num_weeks):
+            for d in range(days_per_week):
+                work_flag = work[w, d, e]
+                model.Add(x[w, d, e] == shift_to_int["L"]).OnlyEnforceIf(work_flag)
 
-for w in range(num_weeks - 1):
-    if w % 2 == 1:
-        model.Add(x[w, 6, luke_idx] == shift_to_int["D/O"])
-        model.Add(x[w+1, 0, luke_idx] == shift_to_int["D/O"])
+if "Will Work Middle" in required_rules:
+    for emp in required_rules["Will Work Middle"]:
+        e = employees.index(emp)
+        for w in range(num_weeks):
+            for d in range(days_per_week):
+                work_flag = work[w, d, e]
+                model.Add(x[w, d, e] == shift_to_int["M"]).OnlyEnforceIf(work_flag)
 
-# Senaka: off every Sunday.
-senaka_idx = employees.index("Senaka")
-for w in range(num_weeks):
-    model.Add(x[w, 0, senaka_idx] == shift_to_int["D/O"])
-
-# Stacey: no Early shifts.
-stacey_idx = employees.index("Stacey")
-for w in range(num_weeks):
-    for d in range(days_per_week):
-        model.Add(x[w, d, stacey_idx] != shift_to_int["E"])
-
-# Callum: does not work Saturday; if working, only Late.
-for w in range(num_weeks):
-    for d in range(days_per_week):
-        if d == 6:  # Saturday
-            model.Add(x[w, d, callum_idx] == shift_to_int["D/O"])
-        else:
-            is_callum_work = model.NewBoolVar(f"callum_work_{w}_{d}")
-            model.Add(x[w, d, callum_idx] != shift_to_int["D/O"]).OnlyEnforceIf(is_callum_work)
-            model.Add(x[w, d, callum_idx] == shift_to_int["D/O"]).OnlyEnforceIf(is_callum_work.Not())
-            model.Add(x[w, d, callum_idx] == shift_to_int["L"]).OnlyEnforceIf(is_callum_work)
+if "Will work Early" in required_rules:
+    for emp in required_rules["Will work Early"]:
+        e = employees.index(emp)
+        for w in range(num_weeks):
+            for d in range(days_per_week):
+                work_flag = work[w, d, e]
+                model.Add(x[w, d, e] == shift_to_int["E"]).OnlyEnforceIf(work_flag)
 
 ###############################################################################
 # 5) No Late-to-Early across week boundaries:
