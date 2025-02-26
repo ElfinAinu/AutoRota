@@ -249,13 +249,13 @@ def add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shif
 
     num_weeks = 4
     days_per_week = 7
-    # Load the complete JSON from Rules.json to extract employee lists.
+    # Load from JSON: assume the loaded JSON is stored in full_json
     with open(json_file, "r") as f:
         full_json = json.load(f)
-    # Derive employees from the JSON lists.
     shift_leaders = full_json.get("employees-shift_leaders", [])
-    step_up = full_json.get("employees-step_up", [])
-    employees = shift_leaders + step_up  # Order as desired.
+    stepup_employees = full_json.get("employees-step_up", [])
+    # To keep the employees order as desired:
+    employees = shift_leaders + stepup_employees
     shifts = ["E", "M", "L", "D/O"]
     shift_to_int = {"E": 0, "M": 1, "L": 2, "D/O": 3}
     int_to_shift = {0: "E", 1: "M", 2: "L", 3: "D/O"}
@@ -266,7 +266,7 @@ def add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shif
 
     model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
     add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, len(employees))
-    add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees, step_up)
+    add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees, stepup_employees)
     six_in_a_row = add_consecutive_day_constraints(model, global_work, total_days, len(employees), days_per_week)
     add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, work, num_weeks, days_per_week)
     add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
@@ -415,7 +415,7 @@ if __name__ == "__main__":
 
     model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
     add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, len(employees))
-    add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees)
+    add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees, stepup_employees)
     six_in_a_row = add_consecutive_day_constraints(model, global_work, total_days, len(employees), days_per_week)
     add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, work, num_weeks, days_per_week)
     add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
