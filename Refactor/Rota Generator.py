@@ -524,13 +524,23 @@ if __name__ == "__main__":
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
     add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
 
-    # Enforce that all shift leaders not required for alternating weekends get at least one full weekend off.
     for emp in shift_leaders:
         if emp not in required_rules.get("Every other weekend off", []):
-            # Enforce that the employee either gets a full weekend off or, if not, then at least one singular weekend day off.
-            model.Add(sum(weekend_full_indicators[emp]) +
-                      sum(weekend_sat_only_indicators[emp]) +
-                      sum(weekend_sun_only_indicators[emp]) >= 1)
+            e = employees.index(emp)
+            weekend_off_indicators = []
+            # Loop over all weeks (each week is Sunday to Saturday)
+            for w in range(num_weeks):
+                # Create indicator variables for Sunday off (day index 0) and Saturday off (day index 6)
+                sunday_off = model.NewBoolVar(f"{emp}_Sunday_off_week_{w}")
+                saturday_off = model.NewBoolVar(f"{emp}_Saturday_off_week_{w}")
+                model.Add(x[w, 0, e] == shift_to_int["D/O"]).OnlyEnforceIf(sunday_off)
+                model.Add(x[w, 0, e] != shift_to_int["D/O"]).OnlyEnforceIf(sunday_off.Not())
+                model.Add(x[w, 6, e] == shift_to_int["D/O"]).OnlyEnforceIf(saturday_off)
+                model.Add(x[w, 6, e] != shift_to_int["D/O"]).OnlyEnforceIf(saturday_off.Not())
+                weekend_off_indicators.append(sunday_off)
+                weekend_off_indicators.append(saturday_off)
+            # Enforce that over the entire span at least one weekend day off is taken
+            model.Add(sum(weekend_off_indicators) >= 1)
     add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int)
 
     slack_weekend = []
