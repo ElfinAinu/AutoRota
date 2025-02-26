@@ -421,7 +421,7 @@ if __name__ == "__main__":
     add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
     add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
-    add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, step_up)
+    add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int)
 
     solver = cp_model.CpSolver()
     status = solver.Solve(model)
