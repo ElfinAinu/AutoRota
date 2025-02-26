@@ -479,7 +479,7 @@ def build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift)
                 schedule[w][d][emp] = int_to_shift[val]
     return schedule
 
-def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees):
+def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees, stepup_employees):
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, mode="w", newline="") as csvfile:
         writer = csv.writer(csvfile)
@@ -642,7 +642,7 @@ def add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, d
             else:
                 start_date = datetime.datetime.strptime("23/02/2025", "%d/%m/%Y")  # fallback
             output_file = os.path.join(script_dir, "output", "rota.csv")
-            write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees)
+            write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees, stepup_employees)
             print("Solution found. Wrote to:", os.path.abspath(output_file))
         else:
             print("No solution found.")
@@ -658,7 +658,7 @@ def main():
         else:
             start_date = datetime.datetime.strptime("23/02/2025", "%d/%m/%Y")  # fallback
         output_file = os.path.join(script_dir, "output", "rota.csv")
-        write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees)
+        write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees, stepup_employees)
         print("Solution found. Wrote to:", os.path.abspath(output_file))
     else:
         print("No solution found.")
