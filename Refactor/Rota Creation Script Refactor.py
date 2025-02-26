@@ -64,6 +64,7 @@ model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_w
 ###############################################################################
 def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders):
     weekend_off_indicators = {}
+    weekend_slacks = {}
     for emp in shift_leaders:
         e = employees.index(emp)
         emp_indicators = []
@@ -83,10 +84,12 @@ def add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, s
 
             model.AddBoolOr([not_sunday_off, not_saturday_off]).OnlyEnforceIf(weekend_off.Not())
             emp_indicators.append(weekend_off)
-        # Enforce the hard constraint that each shift leader must have at least one weekend off.
-        model.Add(sum(emp_indicators) >= 1)
+        # Instead of enforcing a hard constraint, introduce a slack variable.
+        slack = model.NewIntVar(0, 1, f"weekend_slack_{emp}")
+        model.Add(sum(emp_indicators) + slack >= 1)
+        weekend_slacks[emp] = slack
         weekend_off_indicators[emp] = emp_indicators
-    return weekend_off_indicators
+    return weekend_off_indicators, weekend_slacks
 # 1) Daily coverage: at least one Early and one Late each day.
 ###############################################################################
 def add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, num_employees):
@@ -221,12 +224,12 @@ add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
 
 # Define shift leaders based on the JSON (or hard-code if needed)
 shift_leaders = ["Jennifer", "Luke", "Senaka", "Stacey"]
-weekend_off_indicators = add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders)
+weekend_off_indicators, weekend_slacks = add_weekend_off_constraints(model, x, num_weeks, days_per_week, employees, shift_to_int, shift_leaders)
 
 ###############################################################################
 # 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
 ###############################################################################
-def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators):
+def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks):
     prefs = []
     if "Late Shifts" in preferred_rules:
         for emp in preferred_rules["Late Shifts"]:
@@ -257,6 +260,8 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
                     prefs.append(var_middle)
     BIG_PENALTY = 1000
     WEEKEND_BONUS = 1000  # Define the bonus for each weekend off
+    WEEKEND_PENALTY = 2000  # heavy penalty for missing a weekend off
+    weekend_penalty_term = sum(weekend_slacks[emp] for emp in weekend_slacks)
     obj_expr = sum(prefs)
     penalties = sum(six_in_a_row[i, e] * BIG_PENALTY for e in range(len(employees)) for i in range(total_days - 5))
     # Penalize working days for step-up employees.
@@ -276,7 +281,8 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
         obj_expr,
         -penalties,
         -stepup_penalty_factor * stepup_penalty,
-        WEEKEND_BONUS * weekend_bonus
+        WEEKEND_BONUS * weekend_bonus,
+        -WEEKEND_PENALTY * weekend_penalty_term
     ])
     model.Maximize(final_obj)
 
@@ -340,7 +346,7 @@ if __name__ == "__main__":
     add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, work, num_weeks, days_per_week)
     add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
-    add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators)
+    add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks)
 
     solver = cp_model.CpSolver()
     status = solver.Solve(model)
