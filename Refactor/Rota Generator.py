@@ -297,7 +297,7 @@ weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicator
 ###############################################################################
 # 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
 ###############################################################################
-def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators, stepup_employees, shift_leaders):
+def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators, stepup_employees, shift_leaders, slack_weekend, slack_weekend_complement, slack_work_days, slack_seven_in_a_row):
     # --- Revised Objective Terms with a Hierarchy ---
 
     # 1. WEEKEND OFF TERMS – Highest Priority:
@@ -533,7 +533,7 @@ if __name__ == "__main__":
     if "Every other weekend off" in required_rules:
         alternating_employees = required_rules["Every other weekend off"]
         enforce_alternating_weekend_off_required(model, x, days_per_week, num_weeks, employees, shift_to_int, alternating_employees)
-    final_obj = add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators, stepup_employees, shift_leaders)
+    final_obj = add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_full_indicators, weekend_sat_only_indicators, weekend_sun_only_indicators, stepup_employees, shift_leaders, slack_weekend, slack_weekend_complement, slack_work_days, slack_seven_in_a_row)
 
     solver = cp_model.CpSolver()
     solver.parameters.random_seed = int(datetime.datetime.now().timestamp() * 1000) % 2147483647
