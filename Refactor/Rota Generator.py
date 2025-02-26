@@ -125,16 +125,20 @@ add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week,
 #    - Everyone except Callum works exactly 5 days per week.
 #    - Callum works at most 2 days per week, and optionally at least 1 overall.
 ###############################################################################
-def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees):
-    callum_idx = employees.index("Callum")
+def add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees, stepup_employees):
     for w in range(num_weeks):
         for e in range(len(employees)):
             day_work = [work[w, d, e] for d in range(days_per_week)]
-            if e == callum_idx:
+            # If the employee is a step-up, restrict them to at most 2 workdays;
+            # otherwise, they must work exactly 5 days per week.
+            if employees[e] in stepup_employees:
                 model.Add(sum(day_work) <= 2)
             else:
                 model.Add(sum(day_work) == 5)
-    model.Add(sum(work[w, d, callum_idx] for w in range(num_weeks) for d in range(days_per_week)) >= 1)
+    # Ensure each step-up works at least one day overall.
+    for emp in stepup_employees:
+        e = employees.index(emp)
+        model.Add(sum(work[w, d, e] for w in range(num_weeks) for d in range(days_per_week)) >= 1)
 
 ###############################################################################
 # 3) Consecutive days constraints:
@@ -224,7 +228,18 @@ def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, 
                         if shift_to_int[shift] not in allowed_set:
                             model.Add(x[w, d, e] != shift_to_int[shift]).OnlyEnforceIf(work[w, d, e])
 
-if __name__ == "__main__":
+def add_unique_shift_leader_constraints(model, x, num_weeks, days_per_week, shift_leaders, shift_to_int):
+    num_shift_leaders = len(shift_leaders)
+    for w in range(num_weeks):
+        for d in range(days_per_week):
+            for shift in ["E", "M", "L"]:
+                indicators = []
+                for i, emp in enumerate(shift_leaders):  # assume these are first in the employees list
+                    indicator = model.NewBoolVar(f"unique_{shift}_w{w}_d{d}_leader{i}")
+                    model.Add(x[w, d, i] == shift_to_int[shift]).OnlyEnforceIf(indicator)
+                    model.Add(x[w, d, i] != shift_to_int[shift]).OnlyEnforceIf(indicator.Not())
+                    indicators.append(indicator)
+                model.Add(sum(indicators) <= 1)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     json_file = os.path.join(script_dir, "Rules.json")
     required_rules, preferred_rules = load_rules(json_file)
@@ -251,7 +266,7 @@ if __name__ == "__main__":
 
     model, x, work, global_work, total_days = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
     add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, len(employees))
-    add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees)
+    add_weekly_work_constraints(model, work, num_weeks, days_per_week, employees, step_up)
     six_in_a_row = add_consecutive_day_constraints(model, global_work, total_days, len(employees), days_per_week)
     add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, work, num_weeks, days_per_week)
     add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
@@ -277,7 +292,7 @@ weekend_off_indicators, weekend_slacks = add_weekend_off_constraints(model, x, n
 ###############################################################################
 # 6) Soft constraints from JSON preferences plus penalty for 6_in_a_row
 ###############################################################################
-def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks):
+def add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, stepup_employees):
     prefs = []
     if "Late Shifts" in preferred_rules:
         for emp in preferred_rules["Late Shifts"]:
@@ -323,7 +338,6 @@ def add_preferred_constraints_and_objective(model, preferred_rules, employees, s
             model.Add(x[w, d, e] == shift_to_int["D/O"]).OnlyEnforceIf(is_weekend_coverage.Not())
             weekend_coverage_bonus.append(is_weekend_coverage)
     weekend_callum_bonus = 3000 * sum(weekend_coverage_bonus)
-    stepup_employees = ["Callum"]  # You can also extract this from JSON
     stepup_penalty = 0
     for emp in stepup_employees:
         e = employees.index(emp)
@@ -407,7 +421,7 @@ if __name__ == "__main__":
     add_allowed_shifts(model, required_rules, employees, shift_to_int, x, work, num_weeks, days_per_week)
     add_week_boundary_constraints(model, x, shift_to_int, num_weeks, employees)
     add_weekend_shift_restrictions(model, x, days_per_week, num_weeks, employees, shift_to_int, shift_leaders)
-    add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks)
+    add_preferred_constraints_and_objective(model, preferred_rules, employees, shift_to_int, num_weeks, days_per_week, x, six_in_a_row, total_days, weekend_off_indicators, weekend_slacks, step_up)
 
     solver = cp_model.CpSolver()
     status = solver.Solve(model)
