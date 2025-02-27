@@ -336,22 +336,33 @@ shift_to_int = {
 # Inverse mapping: useful for converting the solver’s output to shift names.
 int_to_shift = {v: k for k, v in shift_to_int.items()}
 
+def add_consecutive_working_constraints(model, x, shift_to_int, employees, num_weeks, days_per_week, previous_state):
+    total_days = num_weeks * days_per_week
+    work = {}
+    consec = {}
+    for e, emp in enumerate(employees):
+        init = previous_state.get(emp, {}).get("consecutive", 0)
+        for t in range(total_days):
+            w = t // days_per_week
+            d = t % days_per_week
+            work[(e, t)] = model.NewBoolVar(f"work_{emp}_{t}")
+            model.Add(x[w, d, e] <= shift_to_int["L"]).OnlyEnforceIf(work[(e, t)])
+            model.Add(x[w, d, e] >  shift_to_int["L"]).OnlyEnforceIf(work[(e, t)].Not())
+            consec[(e, t)] = model.NewIntVar(0, 6, f"consec_{emp}_{t}")
+            if t == 0:
+                model.Add(consec[(e, 0)] == init + 1).OnlyEnforceIf(work[(e, 0)])
+                model.Add(consec[(e, 0)] == 0).OnlyEnforceIf(work[(e, 0)].Not())
+            else:
+                model.Add(consec[(e, t)] == consec[(e, t-1)] + 1).OnlyEnforceIf(work[(e, t)])
+                model.Add(consec[(e, t)] == 0).OnlyEnforceIf(work[(e, t)].Not())
+            model.Add(consec[(e, t)] <= 6)
+
 model, x = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
 output_dir = os.path.join(script_dir, "output")
 previous_state = load_last_rota(output_dir)
 for e, emp in enumerate(employees):
     if previous_state.get(emp, {}).get("consecutive", 0) >= 6:
         model.Add(x[0, 0, e] == shift_to_int["D/O"])
-    if previous_state.get(emp, {}).get("consecutive", 0) == 5:
-        # If the employee had a 5-day streak and then works on the first new day (becoming 6),
-        # force the following day to be off to respect the maximum 6 consecutive working days rule.
-        b_working_0 = model.NewBoolVar(f"w0_working_{emp}")
-        b_working_1 = model.NewBoolVar(f"w1_working_{emp}")
-        model.Add(x[0,0,e] <= shift_to_int["L"]).OnlyEnforceIf(b_working_0)
-        model.Add(x[0,0,e] >  shift_to_int["L"]).OnlyEnforceIf(b_working_0.Not())
-        model.Add(x[0,1,e] <= shift_to_int["L"]).OnlyEnforceIf(b_working_1)
-        model.Add(x[0,1,e] >  shift_to_int["L"]).OnlyEnforceIf(b_working_1.Not())
-        model.AddImplication(b_working_0, b_working_1.Not())
 
 add_allowed_shifts(model, required_rules, employees, shift_to_int, x, num_weeks, days_per_week)
 add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, employees)
@@ -368,6 +379,7 @@ if alternating_employees:
     enforce_strict_alternating_weekends(model, x, shift_to_int, num_weeks, days_per_week, employees, alternating_employees, weekend_offsets)
 add_no_late_to_early_constraint(model, x, shift_to_int, num_weeks, days_per_week, employees)
 add_objective(model, x, shift_to_int, num_weeks, days_per_week, employees, preferred_rules, alternating_employees)
+add_consecutive_working_constraints(model, x, shift_to_int, employees, num_weeks, days_per_week, previous_state)
 
 solver = cp_model.CpSolver()
 solver.parameters.random_seed = int(datetime.datetime.now().timestamp())
