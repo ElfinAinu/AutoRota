@@ -345,10 +345,13 @@ for e, emp in enumerate(employees):
     if previous_state.get(emp, {}).get("consecutive", 0) == 5:
         # If the employee had a 5-day streak and then works on the first new day (becoming 6),
         # force the following day to be off to respect the maximum 6 consecutive working days rule.
-        b_working = model.NewBoolVar(f"w0_working_{emp}")
-        model.Add(x[0,0,e] <= shift_to_int["L"]).OnlyEnforceIf(b_working)
-        model.Add(x[0,0,e] > shift_to_int["L"]).OnlyEnforceIf(b_working.Not())
-        model.Add(x[0,1,e] == shift_to_int["D/O"]).OnlyEnforceIf(b_working)
+        b_working_0 = model.NewBoolVar(f"w0_working_{emp}")
+        b_working_1 = model.NewBoolVar(f"w1_working_{emp}")
+        model.Add(x[0,0,e] <= shift_to_int["L"]).OnlyEnforceIf(b_working_0)
+        model.Add(x[0,0,e] >  shift_to_int["L"]).OnlyEnforceIf(b_working_0.Not())
+        model.Add(x[0,1,e] <= shift_to_int["L"]).OnlyEnforceIf(b_working_1)
+        model.Add(x[0,1,e] >  shift_to_int["L"]).OnlyEnforceIf(b_working_1.Not())
+        model.AddImplication(b_working_0, b_working_1.Not())
 
 add_allowed_shifts(model, required_rules, employees, shift_to_int, x, num_weeks, days_per_week)
 add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, employees)
