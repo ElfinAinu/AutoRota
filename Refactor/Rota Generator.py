@@ -49,12 +49,17 @@ def load_last_rota(output_dir):
     header = last_block[0]
     for row in last_block[1:]:
         emp = row[0]
-        last_day = row[-1].strip()
-        is_working = last_day not in ["D/O", "", "H"]
+        # Compute consecutive working days by scanning from the end of the week.
+        consec = 0
+        for shift in reversed(row[1:]):
+            if shift.strip() not in ["D/O", "", "H"]:
+                consec += 1
+            else:
+                break
         sun_shift = row[1].strip() if len(row) > 1 else ""
         sat_shift = row[-1].strip() if len(row) >= 7 else ""
         weekend_off = (sun_shift == "D/O" and sat_shift == "D/O")
-        previous_state[emp] = {"consecutive": 1 if is_working else 0,
+        previous_state[emp] = {"consecutive": consec,
                                "weekend_off": weekend_off}
     return previous_state
 
@@ -337,6 +342,13 @@ previous_state = load_last_rota(output_dir)
 for e, emp in enumerate(employees):
     if previous_state.get(emp, {}).get("consecutive", 0) >= 6:
         model.Add(x[0, 0, e] == shift_to_int["D/O"])
+    if previous_state.get(emp, {}).get("consecutive", 0) == 5:
+        # If the employee had a 5-day streak and then works on the first new day (becoming 6),
+        # force the following day to be off to respect the maximum 6 consecutive working days rule.
+        b_working = model.NewBoolVar(f"w0_working_{emp}")
+        model.Add(x[0,0,e] <= shift_to_int["L"]).OnlyEnforceIf(b_working)
+        model.Add(x[0,0,e] > shift_to_int["L"]).OnlyEnforceIf(b_working.Not())
+        model.Add(x[0,1,e] == shift_to_int["D/O"]).OnlyEnforceIf(b_working)
 
 add_allowed_shifts(model, required_rules, employees, shift_to_int, x, num_weeks, days_per_week)
 add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, employees)
