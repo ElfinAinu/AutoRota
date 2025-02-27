@@ -17,6 +17,47 @@ def load_temporary_rules(json_filepath):
         temp_rules = json.load(f)
     return temp_rules
 
+def load_last_rota(output_dir):
+    import glob, re
+    rota_files = glob.glob(os.path.join(output_dir, "Rota - *.csv"))
+    if not rota_files:
+        return {}
+    def extract_date(filename):
+        m = re.search(r"Rota - (\d{4}-\d{2}-\d{2})\.csv", filename)
+        return datetime.datetime.strptime(m.group(1), "%Y-%m-%d") if m else datetime.datetime.min
+    rota_files.sort(key=extract_date)
+    last_file = rota_files[-1]
+    blocks = []
+    with open(last_file, "r", newline="") as csvfile:
+        reader = csv.reader(csvfile)
+        current = []
+        for row in reader:
+            if not any(cell.strip() for cell in row):
+                if current:
+                    blocks.append(current)
+                    current = []
+            else:
+                current.append(row)
+        if current:
+            blocks.append(current)
+    if not blocks:
+        return {}
+    last_block = blocks[-1]
+    if len(last_block) < 2:
+        return {}
+    previous_state = {}
+    header = last_block[0]
+    for row in last_block[1:]:
+        emp = row[0]
+        last_day = row[-1].strip()
+        is_working = last_day not in ["D/O", "", "H"]
+        sun_shift = row[1].strip() if len(row) > 1 else ""
+        sat_shift = row[-1].strip() if len(row) >= 7 else ""
+        weekend_off = (sun_shift == "D/O" and sat_shift == "D/O")
+        previous_state[emp] = {"consecutive": 1 if is_working else 0,
+                               "weekend_off": weekend_off}
+    return previous_state
+
 day_name_to_index = {
     "Sunday": 0,
     "Monday": 1,
@@ -53,16 +94,16 @@ def add_allowed_shifts(model, required_rules, employees, shift_to_int, x, num_we
                     if shift_to_int[shift] not in allowed:
                         model.Add(x[w, d, e] != shift_to_int[shift])
 
-def enforce_strict_alternating_weekends(model, x, shift_to_int, num_weeks, days_per_week, employees, alt_emps):
+def enforce_strict_alternating_weekends(model, x, shift_to_int, num_weeks, days_per_week, employees, alt_emps, weekend_offsets):
     for emp in alt_emps:
         e = employees.index(emp)
+        offset = weekend_offsets.get(emp, 0)
         for w in range(num_weeks - 1):
-            if w % 2 == 0:
-                # Even weeks -> weekend off
+            if (w + offset) % 2 == 0:
+                # Enforce weekend off for this adjusted week
                 model.Add(x[w, days_per_week - 1, e] == shift_to_int["D/O"])  # Saturday
-                model.Add(x[w + 1, 0, e] == shift_to_int["D/O"])              # Sunday of next week
+                model.Add(x[w + 1, 0, e] == shift_to_int["D/O"])               # Sunday of next week
             else:
-                # Odd weeks -> weekend on
                 model.Add(x[w, days_per_week - 1, e] != shift_to_int["D/O"])
                 model.Add(x[w + 1, 0, e] != shift_to_int["D/O"])
 
@@ -291,6 +332,11 @@ shift_to_int = {
 int_to_shift = {v: k for k, v in shift_to_int.items()}
 
 model, x = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
+output_dir = os.path.join(script_dir, "output")
+previous_state = load_last_rota(output_dir)
+for e, emp in enumerate(employees):
+    if previous_state.get(emp, {}).get("consecutive", 0) >= 6:
+        model.Add(x[0, 0, e] == shift_to_int["D/O"])
 
 add_allowed_shifts(model, required_rules, employees, shift_to_int, x, num_weeks, days_per_week)
 add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, employees)
@@ -300,8 +346,11 @@ add_employee_specific_constraints(model, required_rules, employees, day_name_to_
 temp_filepath = os.path.join(script_dir, "Temporary Rules.json")
 temporary_rules = load_temporary_rules(temp_filepath)
 add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, days_per_week, shift_to_int)
+weekend_offsets = {}
+for emp in alternating_employees:
+    weekend_offsets[emp] = 1 if previous_state.get(emp, {}).get("weekend_off", False) else 0
 if alternating_employees:
-    enforce_strict_alternating_weekends(model, x, shift_to_int, num_weeks, days_per_week, employees, alternating_employees)
+    enforce_strict_alternating_weekends(model, x, shift_to_int, num_weeks, days_per_week, employees, alternating_employees, weekend_offsets)
 add_no_late_to_early_constraint(model, x, shift_to_int, num_weeks, days_per_week, employees)
 add_objective(model, x, shift_to_int, num_weeks, days_per_week, employees, preferred_rules, alternating_employees)
 
