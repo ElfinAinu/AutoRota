@@ -98,7 +98,9 @@ def add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_w
 
 def add_stepup_priority(model, x, shift_to_int, num_weeks, days_per_week, employees, stepup_employees):
     num_employees = len(employees)
+    # Identify indices for employees who are NOT stepups (the shift leaders)
     non_stepup_indices = [i for i, emp in enumerate(employees) if emp not in stepup_employees]
+    
     for w in range(num_weeks):
         for d in range(days_per_week):
             for shift in ["E", "M", "L"]:
@@ -112,11 +114,20 @@ def add_stepup_priority(model, x, shift_to_int, num_weeks, days_per_week, employ
                         non_stepup_bools.append(b)
                     else:
                         stepup_bools.append(b)
-                non_stepup_sum = model.NewIntVar(0, 1, f"nonstep_{shift}_{w}_{d}")
-                stepup_sum = model.NewIntVar(0, 1, f"step_{shift}_{w}_{d}")
+                        
+                # Set up sum variables over booleans with appropriate domains.
+                non_stepup_sum = model.NewIntVar(0, len(non_stepup_bools), f"nonstep_{shift}_{w}_{d}")
+                stepup_sum = model.NewIntVar(0, len(stepup_bools), f"step_{shift}_{w}_{d}")
                 model.Add(non_stepup_sum == sum(non_stepup_bools))
                 model.Add(stepup_sum == sum(stepup_bools))
-                model.Add(stepup_sum <= 1 - non_stepup_sum)
+                
+                # Create a helper Boolean that is true if any non-stepup (leader) is assigned.
+                non_stepup_present = model.NewBoolVar(f"non_stepup_present_{shift}_{w}_{d}")
+                model.Add(non_stepup_sum >= 1).OnlyEnforceIf(non_stepup_present)
+                model.Add(non_stepup_sum == 0).OnlyEnforceIf(non_stepup_present.Not())
+                
+                # Enforce that if any leader is covering the shift, then no stepup is allowed.
+                model.Add(stepup_sum == 0).OnlyEnforceIf(non_stepup_present)
 
 def add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, num_weeks, days_per_week, shift_leaders, stepup_employees):
     # Enforce "Working Days" exactly for shift leaders and at most for step-ups.
@@ -266,6 +277,18 @@ employees = shift_leaders + [emp for emp in stepup_employees if emp not in shift
 alternating_employees = []
 if "Every other weekend off" in required_rules:
     alternating_employees = required_rules["Every other weekend off"]
+
+# Define the mapping between shift names and integer values.
+shift_to_int = {
+    "E": 0,    # Early
+    "M": 1,    # Middle
+    "L": 2,    # Late
+    "D/O": 3,  # Day Off
+    "H": 4     # Holiday
+}
+
+# Inverse mapping: useful for converting the solver’s output to shift names.
+int_to_shift = {v: k for k, v in shift_to_int.items()}
 
 model, x = initialize_model(num_weeks, days_per_week, employees, shift_to_int)
 
