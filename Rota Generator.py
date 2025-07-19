@@ -142,41 +142,41 @@ def add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_w
             model.Add(sum(late_vars) >= 1)
             model.Add(sum(working_vars) <= 4)
 
-def add_stepup_priority(model, x, shift_to_int, num_weeks, days_per_week, employees, stepup_employees):
+def add_reserve_priority(model, x, shift_to_int, num_weeks, days_per_week, employees, reserve_employees):
     num_employees = len(employees)
-    # Identify indices for employees who are NOT stepups (the shift leaders)
-    non_stepup_indices = [i for i, emp in enumerate(employees) if emp not in stepup_employees]
+    # Identify indices for employees who are NOT reserves (the duty managers)
+    non_reserve_indices = [i for i, emp in enumerate(employees) if emp not in reserve_employees]
     
     for w in range(num_weeks):
         for d in range(days_per_week):
             for shift in ["E", "M", "L"]:
-                non_stepup_bools = []
-                stepup_bools = []
+                non_reserve_bools = []
+                reserve_bools = []
                 for e in range(num_employees):
                     b = model.NewBoolVar(f"cover_{shift}_{w}_{d}_{e}")
                     model.Add(x[w, d, e] == shift_to_int[shift]).OnlyEnforceIf(b)
                     model.Add(x[w, d, e] != shift_to_int[shift]).OnlyEnforceIf(b.Not())
-                    if e in non_stepup_indices:
-                        non_stepup_bools.append(b)
+                    if e in non_reserve_indices:
+                        non_reserve_bools.append(b)
                     else:
-                        stepup_bools.append(b)
+                        reserve_bools.append(b)
                         
                 # Set up sum variables over booleans with appropriate domains.
-                non_stepup_sum = model.NewIntVar(0, len(non_stepup_bools), f"nonstep_{shift}_{w}_{d}")
-                stepup_sum = model.NewIntVar(0, len(stepup_bools), f"step_{shift}_{w}_{d}")
-                model.Add(non_stepup_sum == sum(non_stepup_bools))
-                model.Add(stepup_sum == sum(stepup_bools))
+                non_reserve_sum = model.NewIntVar(0, len(non_reserve_bools), f"nonres_{shift}_{w}_{d}")
+                reserve_sum = model.NewIntVar(0, len(reserve_bools), f"res_{shift}_{w}_{d}")
+                model.Add(non_reserve_sum == sum(non_reserve_bools))
+                model.Add(reserve_sum == sum(reserve_bools))
                 
-                # Create a helper Boolean that is true if any non-stepup (leader) is assigned.
-                non_stepup_present = model.NewBoolVar(f"non_stepup_present_{shift}_{w}_{d}")
-                model.Add(non_stepup_sum >= 1).OnlyEnforceIf(non_stepup_present)
-                model.Add(non_stepup_sum == 0).OnlyEnforceIf(non_stepup_present.Not())
+                # Create a helper Boolean that is true if any non-reserve (duty manager) is assigned.
+                non_reserve_present = model.NewBoolVar(f"non_reserve_present_{shift}_{w}_{d}")
+                model.Add(non_reserve_sum >= 1).OnlyEnforceIf(non_reserve_present)
+                model.Add(non_reserve_sum == 0).OnlyEnforceIf(non_reserve_present.Not())
                 
-                # Enforce that if any leader is covering the shift, then no stepup is allowed.
-                model.Add(stepup_sum == 0).OnlyEnforceIf(non_stepup_present)
+                # Enforce that if any duty manager is covering the shift, then no reserve is allowed.
+                model.Add(reserve_sum == 0).OnlyEnforceIf(non_reserve_present)
 
-def add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, num_weeks, days_per_week, shift_leaders, stepup_employees):
-    # Enforce "Working Days" exactly for shift leaders and at most for step-ups.
+def add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, num_weeks, days_per_week, duty_managers, reserve_employees):
+    # Enforce "Working Days" exactly for duty managers and at most for reserves.
     if "Working Days" in required_rules:
         for e, emp in enumerate(employees):
             if emp in required_rules["Working Days"]:
@@ -188,9 +188,9 @@ def add_employee_specific_constraints(model, required_rules, employees, day_name
                         model.Add(x[w, d, e] <= shift_to_int["L"]).OnlyEnforceIf(is_working)
                         model.Add(x[w, d, e] > shift_to_int["L"]).OnlyEnforceIf(is_working.Not())
                         work_vars.append(is_working)
-                    if emp in shift_leaders:
+                    if emp in duty_managers:
                         model.Add(sum(work_vars) == required_days)
-                    elif emp in stepup_employees:
+                    elif emp in reserve_employees:
                         model.Add(sum(work_vars) <= required_days)
                     else:
                         model.Add(sum(work_vars) == required_days)
@@ -316,9 +316,9 @@ rules_filepath = os.path.join(script_dir, "Rules.json")
 required_rules, preferred_rules = load_rules(rules_filepath)
 with open(rules_filepath, "r") as f:
     rules_data = json.load(f)
-shift_leaders = rules_data.get("employees-shift_leaders", [])
-stepup_employees = rules_data.get("employees-step_up", [])
-employees = shift_leaders + [emp for emp in stepup_employees if emp not in shift_leaders]
+duty_managers = rules_data.get("employees-duty_manager", [])
+reserve_employees = rules_data.get("employees-duty_manager-reserve", [])
+employees = duty_managers + [emp for emp in reserve_employees if emp not in duty_managers]
 
 alternating_employees = []
 if "Every other weekend off" in required_rules:
@@ -366,9 +366,9 @@ for e, emp in enumerate(employees):
 
 add_allowed_shifts(model, required_rules, employees, shift_to_int, x, num_weeks, days_per_week)
 add_daily_coverage_constraints(model, x, shift_to_int, num_weeks, days_per_week, employees)
-add_stepup_priority(model, x, shift_to_int, num_weeks, days_per_week, employees, stepup_employees)
-# Enforce required working days exactly (no slack) for shift leaders and at most for step-ups.
-add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, num_weeks, days_per_week, shift_leaders, stepup_employees)
+add_reserve_priority(model, x, shift_to_int, num_weeks, days_per_week, employees, reserve_employees)
+# Enforce required working days exactly (no slack) for duty managers and at most for reserves.
+add_employee_specific_constraints(model, required_rules, employees, day_name_to_index, shift_to_int, x, num_weeks, days_per_week, duty_managers, reserve_employees)
 temp_filepath = os.path.join(script_dir, "Temporary Rules.json")
 temporary_rules = load_temporary_rules(temp_filepath)
 add_temporary_constraints(model, x, employees, temporary_rules, num_weeks, days_per_week, shift_to_int)
@@ -396,7 +396,7 @@ def build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift)
                 schedule[w][d][emp] = int_to_shift[val]
     return schedule
 
-def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees, stepup_employees):
+def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees, reserve_employees):
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, mode="w", newline="") as csvfile:
         writer = csv.writer(csvfile)
@@ -408,7 +408,7 @@ def write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week
                 row = [emp]
                 for d in range(days_per_week):
                     shift_str = schedule[w][d][emp]
-                    if emp in stepup_employees and shift_str == "D/O":
+                    if emp in reserve_employees and shift_str == "D/O":
                         row.append("")
                     else:
                         row.append(shift_str)
@@ -426,7 +426,7 @@ else:
 if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
     schedule = build_schedule(solver, x, num_weeks, days_per_week, employees, int_to_shift)
     output_file = os.path.join(script_dir, "output", f"Rota - {out_date_str}.csv")
-    write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees, stepup_employees)
+    write_output_csv(schedule, output_file, start_date, num_weeks, days_per_week, employees, reserve_employees)
     print("Solution found. Wrote to:", os.path.abspath(output_file))
 else:
     print("No solution found.")

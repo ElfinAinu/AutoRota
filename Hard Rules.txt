@@ -7,6 +7,6 @@ Individual preferences are aimed for, with weighting a reward for any deviations
 Everyone gets one full weekend off over the course of the Rota.
 Everyone should have a distribution of weekend days off equally - minimise favouritsm.
 Days off should be kept together and not separated as best as possible.
-Employees-step_up are to be used only if required to meet requirements of shift_leaders.
-On days employees-step_up are not working, they are to be listed with a null value.
-Step_up working days are the maximum, they may have fewer.
+Employees-duty_manager-reserve are to be used only if required to meet requirements of duty_managers.
+On days employees-duty_manager-reserve are not working, they are to be listed with a null value.
+Reserve working days are the maximum, they may have fewer.

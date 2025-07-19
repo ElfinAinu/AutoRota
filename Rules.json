@@ -1,11 +1,11 @@
 {
-  "employees-shift_leaders": [
+  "employees-duty_manager": [
     "Jane",
     "Jill",
     "Jack",
     "John"
   ],
-  "employees-step_up": [
+  "employees-duty_manager-reserve": [
     "Bob"
   ],
   "Rules": {
