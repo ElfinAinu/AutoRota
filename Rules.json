@@ -1,111 +1,69 @@
 {
-    "Instructions": {
-      "description": [
-        "You are to create a supermarket Rotas for the management team of a supermarket.",
-        "This document outlines the rules and guidelines for the construction of the rota",
-        "You must adhere to the rules as strictly as possible", 
-        "After completion, you MUST review the rota you have made and double check against provided rules for adherence before output"
-        ]
-    },
-    "Rota Overall rules": {
-      "rota rules": [
-        "Shifts are 9 hours long",
-        "Rota runs Sunday to Saturday, HOWEVER any rules referring to weekends should be considered as Saturday and Sunday together with regard to date such as 22/02/2025-23/02/2025 - this will be bridging the gap of one week to the next",
-        "Early Shift is 6am - 3pm",
-        "Middle Shift is changeable by personal preference but typically between 9am-7pm",
-        "Late Shift is 3pm-12am",
-        "Rota covers 4 weeks at a time",
-        "Someone must be in during business hours 6am-12pm",
-        "Required rules must be followed",
-        "Preferred rules should be weighted beneath required but still aim to achieve",
-        "Rules must be considered across all 4 weeks including week into week",
-        "There will be someone on an Early and someone on a Late every day without exception"
+  "employees-shift_leaders": [
+    "Jane",
+    "Jill",
+    "Jack",
+    "John"
+  ],
+  "employees-step_up": [
+    "Bob"
+  ],
+  "Rules": {
+    "required": {
+      "No Late to Early": [
+        "Jane",
+        "Jill",
+        "Jack",
+        "John",
+        "Bob"
+      ],
+      "Working Days": {
+        "Jane": 5,
+        "Jill": 5,
+        "Jack": 5,
+        "John": 5,
+        "Bob": 2
+      },
+      "Every other weekend off": [
+        "Jill"
+      ],
+      "Days won't work": {
+        "Jack": "Sunday",
+        "Bob": "Saturday"
+      },
+      "Will Work Late": [
+        "Bob",
+        "Jane",
+        "John"
+      ],
+      "Will Work Middle": [
+        "Jack",
+        "John",
+        "Jane"
+      ],
+      "Will work Early": [
+        "Jill",
+        "Jack",
+        "Jane"
       ]
     },
-    "Output Rules": [
-      "Output should be in CSV format",
-      "Names for Rows",
-      "Dates for Columns, 'Day - DD/MM'",
-      "Shifts for Cells",
-      "'D/O' used to note a day off",
-      "Early Shifts noted as 'E'",
-      "Middle Shifts noted as 'M'",
-      "Late Shifts noted as 'L'",
-      "Should be one table per week",
-      "Should be one file per month",
-      "Dates should be in format 'dd/mm/yyyy'"
-    ],
-    "Required": {
-      "Everyone": {
-        "rules": [
-          "No more than 6 days in a row",
-          "No Late into Early Shifts",
-          "5 Days a week unless stated otherwise"
-        ]
-      },
-      "Jennifer": {
-        "rules": [
-          "At least one weekend off"
-        ]
-      },
-      "Luke": {
-        "rules": [
-          "Every other weekend off",
-          "Early Shifts"
-        ]
-      },
-      "Senaka": {
-        "rules": [
-          "Every sunday off"
-        ]
-      },
-      "Stacey": {
-        "rules": [
-          "At least one weekend off",
-          "No Early Shifts"
-        ]
-      },
-      "Callum": {
-        "rules": [
-            "Does not work Saturday",
-            "Only Late Shifts",
-            "Only 2 days a week AT MOST",
-            "To be used exclusively when no other option is available, must be considered last",
-            "When not working, output field must be left null"
+    "preferred": {
+      "Late Shifts": [
+        "Jane"
+      ],
+      "Early Shifts": [
+        "Jack"
+      ],
+      "Middle Shifts": [
+        "Jack",
+        "John"
+      ],
+      "Days": {
+        "Bob": [
+          "Friday",
+          "Sunday"
         ]
       }
-    },
-    "Preferred": {
-      "Everyone": {
-        "rules": [
-          "Two days off together",
-          "Everyone gets multiple days off on the weekend"
-        ]
-      },
-      "Jennifer": {
-        "rules": [
-          "Late Shifts"
-        ]
-      },
-      "Luke": {
-        "rules": []
-      },
-      "Senaka": {
-        "rules": [
-          "Early Shifts",
-          "Middle Shifts"
-        ]
-      },
-      "Stacey": {
-        "rules": [
-          "Middle Shifts"
-        ]
-      },
-        "Callum": {
-            "rules": ["Friday and Sundays",
-            "No more than 1 shift a week",
-            "Occasionally 0 shift a week"]
-        }
     }
   }
-  
+}

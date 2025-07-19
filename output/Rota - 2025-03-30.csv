@@ -1,0 +1,28 @@
+Name,Sun 30/03,Mon 31/03,Tue 01/04,Wed 02/04,Thu 03/04,Fri 04/04,Sat 05/04
+Jane,L,L,L,L,D/O,L,D/O
+Jill,E,D/O,E,E,E,E,D/O
+Jack,D/O,E,D/O,E,E,E,E
+John,D/O,M,M,M,D/O,M,L
+Bob,,,,,L,,
+
+Name,Sun 06/04,Mon 07/04,Tue 08/04,Wed 09/04,Thu 10/04,Fri 11/04,Sat 12/04
+Jane,E,L,L,D/O,L,L,D/O
+Jill,D/O,E,D/O,E,E,E,E
+Jack,D/O,E,E,E,E,E,D/O
+John,D/O,M,D/O,M,M,M,L
+Bob,L,,,L,,,
+
+Name,Sun 13/04,Mon 14/04,Tue 15/04,Wed 16/04,Thu 17/04,Fri 18/04,Sat 19/04
+Jane,L,L,L,D/O,L,L,D/O
+Jill,E,E,D/O,E,E,E,D/O
+Jack,D/O,D/O,E,E,E,E,E
+John,D/O,M,M,M,D/O,M,L
+Bob,,,,L,,,
+
+Name,Sun 20/04,Mon 21/04,Tue 22/04,Wed 23/04,Thu 24/04,Fri 25/04,Sat 26/04
+Jane,E,L,D/O,L,L,L,D/O
+Jill,D/O,D/O,E,E,E,E,E
+Jack,D/O,E,E,E,E,E,D/O
+John,D/O,M,M,M,D/O,M,L
+Bob,L,,L,,,,
+
